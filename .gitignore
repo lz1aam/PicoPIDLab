@@ -1,0 +1,43 @@
+# Strict publish whitelist
+# Ignore everything by default, then allow only public-scope paths.
+*
+
+# Root files allowed to sync
+!/.gitignore
+!/README.md
+!/CONTRIBUTING.md
+!/CHANGELOG.md
+!/codeofconduct.md
+!/LICENSE
+
+# Public project trees
+!/hardware/
+!/hardware/**
+!/firmware/
+!/firmware/**
+!/runner/
+!/runner/**
+!/docs/
+!/docs/**
+
+# Local-only/runtime-generated exclusions inside allowed trees
+runner/runs/
+
+# Generic generated artifacts (safety)
+__pycache__/
+*.py[cod]
+*.tmp
+*.log
+*.asv
+*.autosave
+*.m~
+slprj/
+*.slxc
+*.mdl.r*
+*.mex*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

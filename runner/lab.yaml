@@ -1,0 +1,485 @@
+# PicoPID experiments configuration
+# This YAML file is the preferred editable config (supports comments).
+#
+# Typical usage (from repository root):
+#   python3 runner/lab.py
+# (interactive menu appears; select experiment number or 'q')
+#
+# How this script works:
+# - The script reads this file and builds the experiment menu from `experiments`.
+# - Each experiment is a recipe (parameters + behavior).
+# - During a run, all firmware lines starting with "#" are shown in terminal.
+# - Telemetry lines (PV/SP/OP) are logged and plotted.
+#
+# Parameter precedence (important):
+# 1) Recipe params from this file are sent to firmware before each run.
+# 2) Existing values in firmware/profile.py are used only for params not set in recipe.
+# 3) Therefore, for recipe-driven labs treat this file as the active source of truth.
+#
+# Editing workflow:
+# 1) Duplicate an experiment block and rename its ID.
+# 2) Change only 1-2 parameters at a time.
+# 3) Run and compare outputs under `runner.out`.
+# 4) Keep names stable so run folders are easy to compare.
+#
+# Runner-level defaults used directly by the script.
+# Experiments are recipe-driven from this file (no tuning CLI overrides).
+runner:
+  # Serial port. Use "auto" unless you need to force a specific device.
+  # Examples: "auto", "/dev/ttyACM0", "/dev/ttyACM1"
+  port: auto
+  # UART baud rate for command channel.
+  baud: 115200
+  # Timeout for command/ack operations with firmware.
+  timeout: 8.0
+  # Enable/disable live PV/SP/OP plotting.
+  live: true
+  # Settling band used for calculated metrics (saved to metrics.json).
+  settle_band: 1.0
+  # Verbose serial diagnostics (usually keep false).
+  verbose: false
+  # Output root directory. Each run creates a timestamped subfolder.
+  out: runs
+
+# Global plotting defaults.
+plot:
+  # Saved plot size and quality.
+  figsize: [11, 7]
+  dpi: 140
+  # Curve styling.
+  line_width: 1.6
+  show_grid: true
+  legend_loc: best
+  # Axis limits:
+  # - null => script chooses dynamic defaults from experiment params.
+  # - [min, max] => fixed axis limits.
+  #
+  # Optional axis mode flags (supported by script):
+  # - x_axis_mode: "zero" | "auto" | "custom"
+  # - temperature_axis_mode: "zero" | "auto" | "custom"
+  # - output_axis_mode: "zero" | "auto" | "custom"
+  # Explicit limits (xlim/temperature_ylim/output_ylim) always override mode flags.
+  xlim: null
+  temperature_ylim: null
+  output_ylim: [0, 110]
+
+# Metrics configuration:
+# - compute: "all" or list of metric keys to keep from computed metrics
+#            NOTE: core keys are always kept:
+#              samples, duration_s, error, sp_final_c, pv_final_c, settle_band_c
+#              plus fopdt/tuning blocks when available.
+# - display: metric keys used in saved metrics_summary.png
+# - save_plot: save metrics_summary.png in each run folder
+# - show_window: open/update a live metrics figure window during each run
+# Valid metric keys:
+# - tracking: IAE, ISE, ITAE, steady_state_error_c, rise_time_s, settling_time_s,
+#             overshoot_pct, op_rms_pct
+# - noise: noise_std_c, noise_rms_c, noise_p2p_c, noise_mad_c, pv_mean_c
+# - model summary (when parsed): model_K, model_tau_s, model_theta_s, model_rmse
+# Note: terminal metric summary is intentionally disabled in code;
+# firmware "#" messages are the terminal source of truth.
+metrics:
+  compute: all
+  display:
+    - IAE
+    - ISE
+    - ITAE
+    - steady_state_error_c
+    - rise_time_s
+    - settling_time_s
+    - overshoot_pct
+    - op_rms_pct
+  save_plot: true
+  show_window: true
+
+# Experiments (dict style keyed by experiment ID).
+# Each entry can include:
+#   description: text shown in menu
+#   shortname: folder suffix
+#   kind: standard | fopdt | tuning | sweep
+#     auto-detection note:
+#     - if kind is "standard" and sweep.grid is provided, script promotes to "sweep"
+#   params: firmware params to send
+#   plot: per-experiment plot overrides
+#   metrics: per-experiment metrics overrides
+#   completion: optional run completion policy
+#     mode: duration | token
+#     duration_s: for mode=duration (seconds)
+#     done_tokens: ["text token", ...] for mode=token
+#     require_prompt: true/false (token mode)
+#     stop_on_done: true/false (token mode)
+#     timeout_s: hard timeout in seconds
+#     stop_at_s: optional forced stop time cap (seconds)
+#   command: optional firmware run command override
+#     control | tune | model | monitor
+#   sweep:
+#     grid:
+#       PARAM_A: [v1, v2]
+#       PARAM_B: [v1, v2, v3]
+#
+# Kind guide:
+# - standard: fixed-duration tracking experiment (uses EXPERIMENT_RUN_S).
+# - fopdt: open-loop identification procedure (token-completed).
+# - tuning: explicit relay tuning procedure profile (token-completed).
+# - sweep: runs cartesian product of sweep.grid values.
+#
+# Recommended valid recipe combinations:
+# - ONOFF/PID/FUZZY/MPC tracking labs: kind=standard + EXPERIMENT_RUN_S in params
+# - FOPDT identification: kind=fopdt
+# - PID relay tuning: kind=tuning + CONTROL_MODE=PID + relay-family TUNING_RULE (ZN_2_*/TL_*)
+# - parameter sweep: kind=sweep + sweep.grid
+#
+# Telemetry verbosity in firmware (optional per recipe via params):
+# - TELEMETRY_MODE: "INFO" | "NORMAL" | "MPC"
+#   INFO -> only firmware "# ..." lines (no PV/SP/OP rows)
+#   NORMAL -> PV/SP/OP rows in all modes
+#   MPC  -> PV/SP/OP/YH/YP rows in MPC mode, PV/SP/OP in others
+# Note: INFO mode reduces terminal/plot load but disables telemetry-based metrics/plots.
+#
+# Completion tips:
+# - Use mode=token for firmware procedures that print explicit done markers.
+# - Keep done_tokens specific and stable.
+# - Keep timeout_s generous to avoid false timeout on slow thermal runs.
+# - Keep EXPERIMENT_RUN_S in params when you want a clear time cap.
+#
+# Default completion policy used by script when omitted:
+# - standard: mode=duration, duration from EXPERIMENT_RUN_S
+# - fopdt: mode=token, done_tokens=["# FINISH: done"], require_prompt=true, stop_on_done=false
+# - tuning: mode=token, done_tokens=["# FINISH: done"], require_prompt=true, stop_on_done=false
+experiments:
+  # [0] DEVICE_NOISE_BASELINE
+  DEVICE_NOISE_BASELINE:
+    description: "Passive noise baseline"
+    shortname: noise_baseline
+    kind: standard
+    command: monitor
+    completion:
+      mode: duration
+      duration_s: 120
+      timeout_s: 180
+    metrics:
+      display:
+        - noise_std_c
+        - noise_rms_c
+        - noise_p2p_c
+        - noise_mad_c
+        - pv_mean_c
+        - samples
+        - duration_s
+    params:
+      TELEMETRY_MODE: NORMAL
+      EXPERIMENT_RUN_S: 120
+
+  # [1] ONOFF_STEP_TRACKING
+  ONOFF_STEP_TRACKING:
+    description: "ONOFF step tracking"
+    shortname: onoff_step
+    kind: standard
+    params:
+      CONTROL_MODE: ONOFF
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      ONOFF_HYST_C: 1.0
+      ONOFF_ON_PERCENT: 100
+
+  # [2] FOPDT_STEP_TEST
+  FOPDT_STEP_TEST:
+    description: "FOPDT model identification"
+    shortname: fopdt_step
+    kind: fopdt
+    metrics:
+      save_plot: false
+      show_window: false
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      EXPERIMENT_RUN_S: 300
+      STEADY_WINDOW_S: 15.0
+      STEADY_BAND_C: 0.3
+      FOPDT_U1_PERCENT: 100
+
+  # [3] PID_TUNING_RELAY
+  PID_TUNING_RELAY:
+    description: "PID relay tuning"
+    shortname: pid_tuning_relay
+    kind: tuning
+    metrics:
+      save_plot: true
+      show_window: true
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      PID_VARIANT: PID
+      PID_AW_TYPE: CLAMP
+      TUNING_RULE: ZN_2_PID
+      TUNING_TARGET_C: 50.0
+      TUNING_BAND_C: 1.0
+      TUNING_CYCLES: 5
+      EXPERIMENT_RUN_S: 180
+
+  # [4] P_STEP_TRACKING
+  P_STEP_TRACKING:
+    description: "P step tracking"
+    shortname: pid_p_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 45.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: PID
+      PID_AW_TYPE: CLAMP
+      PID_ALGORITHM: PARALLEL
+      # Gains intentionally not set here to preserve tuned RAM values.
+      # Example forced P-only override (disabled):
+      # KP: 32.6766
+      # KI: 0.0
+      # KD: 0.0
+
+  # [5] PI_STEP_TRACKING
+  PI_STEP_TRACKING:
+    description: "PI step tracking"
+    shortname: pid_pi_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 45.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: PID
+      PID_AW_TYPE: CLAMP
+      PID_ALGORITHM: PARALLEL
+      # Gains intentionally not set here to preserve tuned RAM values.
+      # Example forced PI override (disabled):
+      # KP: 29.4089
+      # KI: 3.41055
+      # KD: 0.0
+
+  # [6] PID_PARALLEL_STEP_TRACKING
+  PID_PARALLEL_STEP_TRACKING:
+    description: "PID parallel step tracking"
+    shortname: pid_step_manual
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: PID
+      PID_AW_TYPE: CLAMP
+      PID_ALGORITHM: PARALLEL
+      # Gains intentionally not set here to preserve tuned RAM values.
+      # Example forced PARALLEL override (disabled):
+      # KP: 39.2119
+      # KI: 7.57141
+      # KD: 50.769
+
+  # [7] PID_IDEAL_STEP_TRACKING
+  PID_IDEAL_STEP_TRACKING:
+    description: "PID ideal step tracking"
+    shortname: pid_ideal_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: PID
+      PID_AW_TYPE: CLAMP
+      PID_ALGORITHM: IDEAL
+      # IDEAL parameters intentionally not set here to preserve tuned RAM values.
+      # Example forced IDEAL override (disabled):
+      # KC: 39.2119
+      # TI_S: 5.17894
+      # TD_S: 1.29473
+
+
+  # [8] FUZZY_STEP_TRACKING
+  FUZZY_STEP_TRACKING:
+    description: "Fuzzy step tracking"
+    shortname: fuzzy_step
+    kind: standard
+    params:
+      CONTROL_MODE: FUZZY
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 45.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      FUZZY_E_SCALE_C: 8.0
+      FUZZY_DE_SCALE_C_PER_S: 1.0
+      FUZZY_DU_RATE_MAX: 20.0
+      FUZZY_DE_FILTER_ALPHA: 0.6
+
+  # [9] FUZZY_SCALING_SWEEP
+  FUZZY_SCALING_SWEEP:
+    description: "Fuzzy scaling sweep"
+    shortname: fuzzy_scaling_sweep
+    kind: sweep
+    params:
+      CONTROL_MODE: FUZZY
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 45.0
+      EXPERIMENT_RUN_S: 45
+      DIST_ENABLE: false
+      FUZZY_DU_RATE_MAX: 20.0
+      FUZZY_DE_FILTER_ALPHA: 0.6
+    sweep:
+      grid:
+        FUZZY_E_SCALE_C: [4.0, 8.0, 12.0]
+        FUZZY_DE_SCALE_C_PER_S: [0.5, 1.0, 1.5]
+
+  # [10] MPC_STEP_TRACKING
+  MPC_STEP_TRACKING:
+    description: "MPC step tracking"
+    shortname: mpc_step
+    kind: standard
+    metrics:
+      display: [IAE, ITAE, steady_state_error_c, overshoot_pct, settling_time_s]
+    params:
+      CONTROL_MODE: MPC
+      TELEMETRY_MODE: MPC
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      MPC_HORIZON_STEPS: 100
+      MPC_GRID_STEP_PCT: 2.0
+      MPC_MAX_CANDIDATES: 41
+      MPC_DU_MAX_PCT: 2.5
+      MPC_LAMBDA_MOVE: 0.1
+      MPC_OBSERVER_GAIN: 0.5
+
+  # [11] SMITH_PI_STEP_TRACKING
+  SMITH_PI_STEP_TRACKING:
+    description: "Smith PI step tracking"
+    shortname: smith_pi_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: SMITH_PI
+
+  # [12] PID_2DOF_STEP_TRACKING
+  PID_2DOF_STEP_TRACKING:
+    description: "PID 2DOF step tracking"
+    shortname: pid_2dof_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: 2DOF
+      PID_ALGORITHM: PARALLEL
+      PID_AW_TYPE: CLAMP
+      PID_BETA: 0.9
+      # Base gains intentionally not set here to preserve tuned RAM values.
+      # Example forced base-gain override (disabled):
+      # KP: 39.2119
+      # KI: 7.57141
+      # KD: 50.769
+
+  # [13] PID_FF_STEP_TRACKING
+  PID_FF_STEP_TRACKING:
+    description: "PID feedforward step tracking"
+    shortname: pid_ff_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: FF_PID
+      PID_ALGORITHM: PARALLEL
+      PID_AW_TYPE: CLAMP
+      FF_MODE: FOPDT_GAIN
+      # Base gains intentionally not set here to preserve tuned RAM values.
+      # Example forced base-gain override (disabled):
+      # KP: 39.2119
+      # KI: 7.57141
+      # KD: 50.769
+
+  # [14] PID_GAIN_SCHED_STEP_TRACKING
+  PID_GAIN_SCHED_STEP_TRACKING:
+    description: "PID gain schedule step tracking"
+    shortname: pid_gain_sched_step
+    kind: standard
+    params:
+      CONTROL_MODE: PID
+      TELEMETRY_MODE: NORMAL
+      SETPOINT_TYPE: STEP
+      SETPOINT_C: 50.0
+      EXPERIMENT_RUN_S: 120
+      DIST_ENABLE: true
+      DIST_MODE: STEP
+      DIST_MAG_PCT: -20.0
+      DIST_START_S: 60.0
+      DIST_DURATION_S: 20.0
+      PID_VARIANT: GAIN_SCHED
+      PID_ALGORITHM: PARALLEL
+      PID_AW_TYPE: CLAMP
+      GS_VARIABLE: PV
+      # GS table intentionally not set here to preserve tuned RAM values.
+      # Example forced schedule override (disabled):
+      # GS_TABLE: [[25.0, 6.0, 0.40, 0.05], [50.0, 5.0, 0.50, 0.10], [75.0, 4.0, 0.60, 0.15]]

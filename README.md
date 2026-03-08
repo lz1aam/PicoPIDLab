@@ -143,14 +143,9 @@ At cutoff:
 - hold active for minimum hold time
 - recovery only after cooldown below hysteresis threshold
 
-## MATLAB / Simulink
-
-MATLAB/Simulink tooling is maintained as local/private tooling and is not part of public GitHub sync scope.
-
 ## Reporting Style
 
 - `docs/en/REPORTING_STYLE.md`
-- `docs/bg/СТИЛ_НА_ОТЧЕТИ.md`
 
 ## Community
 

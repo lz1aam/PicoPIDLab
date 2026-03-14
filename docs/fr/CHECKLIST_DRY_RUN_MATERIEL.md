@@ -8,8 +8,8 @@
 ## Pré-vol sécurité
 
 - exécuter `check`
-- vérifier `# RESULT: check passed (profile is valid)`
-- régler `TEMP_CUTOFF_C 80`, `SAFETY_HOLD_S 5`, `SAFETY_HYST_C 2`
+- vérifier `# RESULT: check passed (config is valid)`
+- régler `TEMP_CUTOFF_C 80`
 - exécuter `check` à nouveau
 
 ## Dry-run FOPDT
@@ -20,7 +20,7 @@
 
 ## Dry-run TUNING relay
 
-- configurer `TUNING_RULE ZN_2_PID`, `PID_VARIANT PID`, `PID_AW_TYPE CLAMP`, `PID_ALGORITHM PARALLEL`, `TUNING_TARGET_C 50`, `TUNING_BAND_C 1`, `TUNING_CYCLES 5`, `EXPERIMENT_RUN_S 480`
+- configurer `TUNING_RULE ZN2_PID`, `PID_VARIANT PID`, `PID_AW_TYPE CLAMP`, `PID_ALGORITHM PARALLEL`, `TUNING_TARGET_C 50`, `TUNING_BAND_C 1`, `TUNING_CYCLES 5`, `EXPERIMENT_RUN_S 480`
 - `check`
 - `tune`
 

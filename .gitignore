@@ -22,6 +22,7 @@
 
 # Local-only/runtime-generated exclusions inside allowed trees
 runner/runs/
+tests/
 
 # Generic generated artifacts (safety)
 __pycache__/

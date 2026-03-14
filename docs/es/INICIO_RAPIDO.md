@@ -1,6 +1,6 @@
 # Inicio rápido
 
-Versión objetivo: **v1.2.6**
+Versión objetivo: **v1.2.8**
 
 Este documento cubre los dos flujos soportados:
 - **Flujo Thonny** (terminal de firmware directo)
@@ -41,7 +41,7 @@ Comandos típicos:
 
 1. `check`
 2. `status`
-3. `params`, `params pid`, `params model`, `params tuning`
+3. `params`, `params pid`, `params model`, `params tune`
 4. `control` / `tune` / `model` / `monitor`
 5. durante ejecución: `stop`
 
@@ -69,7 +69,7 @@ python3 runner/lab.py
 
 - `h` ayuda
 - `c` catálogo
-- `r <id|exp_id>` ejecutar receta
+- `e <id|exp_id>` ejecutar experimento
 - `s` detener ejecución activa
 - `k` `check` de firmware
 - `u` estado host
@@ -86,7 +86,7 @@ Entradas no host se reenvían a firmware.
 ## 5. Sistema de recetas (`runner/lab.yaml`)
 
 - Fuente de recetas: `runner/lab.yaml`
-- Parámetros de respaldo: `firmware/profile.py`
+- Parámetros de respaldo: `firmware/config.py`
 
 Tipos:
 - `standard`
@@ -109,11 +109,9 @@ Token de finalización:
 Antes de cada ejecución:
 
 1. `check`
-2. Confirmar: `# RESULT: check passed (profile is valid)`
+2. Confirmar: `# RESULT: check passed (config is valid)`
 3. Verificar parámetros de seguridad:
    - `TEMP_CUTOFF_C`
-   - `SAFETY_HOLD_S`
-   - `SAFETY_HYST_C`
 
 ## 8. Solución de problemas
 
@@ -138,4 +136,4 @@ Antes de cada ejecución:
 - `docs/en/SETTINGS_DEPENDENCIES.md`
 - `docs/en/REPORTING_STYLE.md`
 - `docs/en/CONTROL_FORMULAS.md`
-- `docs/en/PROFILE_TUTORIAL.md`
+- `docs/en/CONFIG_TUTORIAL.md`

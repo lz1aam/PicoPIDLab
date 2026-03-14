@@ -1,6 +1,6 @@
-# Guide de profile.py
+# Guide de config.py
 
-`firmware/profile.py` contient uniquement les paramètres pédagogiques modifiables.
+`firmware/config.py` contient uniquement les paramètres pédagogiques modifiables.
 
 ## Flux recommandé
 

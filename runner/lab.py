@@ -3,7 +3,7 @@
 PicoPID Lab PC-side experiment runner.
 
 Usage examples:
-  python3 runner/lab.py                                       # interactive catalog from config recipes
+  python3 runner/lab.py                                       # interactive catalog from config experiments
 
 Dependencies:
   pyserial, numpy, matplotlib
@@ -60,6 +60,10 @@ FOPDT_Y0_RE = re.compile(r"initial steady temperature y0=([0-9.eE+-]+)", re.IGNO
 FOPDT_Y1_RE = re.compile(r"final steady temperature y1=([0-9.eE+-]+)", re.IGNORECASE)
 FOPDT_METHOD_RE = re.compile(r"applied method=([A-Za-z0-9_]+)", re.IGNORECASE)
 TUNING_GAINS_RE = re.compile(r"TUNING: runtime gains updated -> Kp=([0-9.eE+-]+)\s+Ki=([0-9.eE+-]+)\s+Kd=([0-9.eE+-]+)")
+TUNING_PARALLEL_FORM_RE = re.compile(
+    r"Applied PARALLEL form:\s*Kp=([^\s]+)\s+Ki=([^\s]+)\s+Kd=([^\s]+)",
+    re.IGNORECASE,
+)
 TUNING_RELAY_METRICS_RE = re.compile(
     r"relay metrics:\s*A=([0-9.eE+-]+).*d_eff=([0-9.eE+-]+).*Ku=([0-9.eE+-]+)\s+Pu=([0-9.eE+-]+)\s*s\s+PV_pp=([0-9.eE+-]+)",
     re.IGNORECASE,
@@ -71,10 +75,10 @@ _TELEM_YH_RE = re.compile(r"\bYH:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
 _TELEM_YP_RE = re.compile(r"\bYP:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
 _TELEM_T_RE = re.compile(r"\bT:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
 _PARAM_ASSIGN_RE = re.compile(r"\b([A-Z][A-Z0-9_]{1,63})\s*=")
-_PROFILE_ASSIGN_RE = re.compile(r"^\s*([A-Z][A-Z0-9_]{1,63})\s*=", re.MULTILINE)
+_CONFIG_ASSIGN_RE = re.compile(r"^\s*([A-Z][A-Z0-9_]{1,63})\s*=", re.MULTILINE)
 
 # Firmware command-response tokens (current unified style).
-CHECK_OK_TOKENS = ("# RESULT: check passed (profile is valid)",)
+CHECK_OK_TOKENS = ("# RESULT: check passed (config is valid)",)
 CHECK_ERR_TOKENS = ("# ERROR: check failed:",)
 ASSIGN_OK_TOKEN = "# RESULT: "
 ASSIGN_ERR_TOKENS = ("# ERROR: assign failed:", "# ERROR:")
@@ -82,7 +86,7 @@ UNKNOWN_CMD_TOKENS = ("# ERROR: unknown command",)
 
 # TODO(runner):
 # - Add firmware/runner schema preflight check (fail early with actionable diff
-#   when a recipe parameter is unsupported by current firmware build).
+#   when an experiment parameter is unsupported by current firmware build).
 
 MODEL_K_C_PER_PCT = 0.467
 COLLECT_LOOP_SLEEP_IDLE_S = 0.02
@@ -870,7 +874,7 @@ class PicoSession:
         tail = "\n".join(lines[-20:])
         raise RuntimeError(f"Missing assign confirmation for {key_u}. Last lines:\n{tail}")
 
-    def check_profile(self, timeout_s: float):
+    def check_config(self, timeout_s: float):
         lines: List[str] = []
 
         def _do_check(timeout_once: float) -> Tuple[bool, List[str], str]:
@@ -1226,14 +1230,14 @@ def _parse_param_keys_from_lines(lines: Sequence[str]) -> set:
     return keys
 
 
-def _profile_declared_keys() -> set:
-    profile_path = _APP_ROOT / "firmware" / "profile.py"
+def _config_declared_keys() -> set:
+    config_path = _REPO_ROOT / "firmware" / "config.py"
     try:
-        text = profile_path.read_text(encoding="utf-8")
+        text = config_path.read_text(encoding="utf-8")
     except Exception:
         return set()
     out = set()
-    for m in _PROFILE_ASSIGN_RE.finditer(text):
+    for m in _CONFIG_ASSIGN_RE.finditer(text):
         out.add(str(m.group(1)).strip().upper())
     return out
 
@@ -1248,7 +1252,7 @@ def discover_firmware_param_keys(session: PicoSession, timeout_s: float) -> set:
         keys.update(_parse_param_keys_from_lines(lines))
     if keys:
         return keys
-    return _profile_declared_keys()
+    return _config_declared_keys()
 
 
 def preflight_recipe_params(session: PicoSession, params: Dict[str, object], timeout_s: float) -> None:
@@ -1301,7 +1305,7 @@ def safe_apply_params(session: PicoSession, params: Dict[str, object], timeout_s
         session.apply_param(k, p[k], timeout_s)
         sent_keys.append(k)
 
-    session.check_profile(timeout_s)
+    session.check_config(timeout_s)
     return sent_keys
 
 
@@ -1711,6 +1715,26 @@ def parse_tuning_summary(raw_lines: Sequence[str]) -> Optional[Dict[str, object]
             out["ki"] = float(m.group(2))
             out["kd"] = float(m.group(3))
             out["source"] = "tuning"
+            break
+    if "kp" not in out:
+        for line in raw_lines:
+            m = TUNING_PARALLEL_FORM_RE.search(line)
+            if not m:
+                continue
+            try:
+                out["kp"] = float(m.group(1))
+            except Exception:
+                pass
+            try:
+                out["ki"] = float(m.group(2))
+            except Exception:
+                pass
+            try:
+                out["kd"] = float(m.group(3))
+            except Exception:
+                pass
+            if any(k in out for k in ("kp", "ki", "kd")):
+                out["source"] = "applied_parallel_form"
             break
     if out:
         return out
@@ -2313,7 +2337,7 @@ class RunnerRuntime:
 
 
 def _run_recipe_path(runtime: RunnerRuntime, choice: str):
-    # Reload config right before run so recipe edits are picked up without restarting script.
+    # Reload config right before run so experiment edits are picked up without restarting script.
     catalog, cfg = runtime.load_context()
     exp = catalog_lookup(catalog, choice)
     session = runtime.ensure_connected(cfg)
@@ -2339,7 +2363,7 @@ def _print_terminal_help():
     _emit_lab("help:")
     _emit_lab("  h                 help")
     _emit_lab("  c                 catalog")
-    _emit_lab("  r <id|exp_id>     run recipe")
+    _emit_lab("  e <id|exp_id>     run experiment")
     _emit_lab("  s                 stop active firmware run")
     _emit_lab("  k                 firmware check")
     _emit_lab("  u                 host status (overrides/session/config)")
@@ -2417,7 +2441,7 @@ def _run_terminal_path(runtime: RunnerRuntime, cfg: RunnerConfig):
             continue
         if cmd.lower() in ("b", "back"):
             session.clear_pending_io()
-            _emit_lab("terminal home (h=help, c=catalog, r <id>, q=quit)")
+            _emit_lab("terminal home (h=help, c=catalog, e <id>, q=quit)")
             continue
         if cmd.lower() in ("q", "quit", "exit"):
             _emit_lab("exit")
@@ -2481,9 +2505,9 @@ def _run_terminal_path(runtime: RunnerRuntime, cfg: RunnerConfig):
         if op in ("t", "telemetry", "p", "plot", "m", "metrics"):
             _emit_lab("fixed mode: telemetry=off, plot=on, metrics=on")
             continue
-        if op in ("r", "run"):
+        if op in ("e", "experiment", "run"):
             if len(parts) < 2:
-                _emit_lab("usage -> r <id|exp_id>")
+                _emit_lab("usage -> e <id|exp_id>")
                 continue
             key = parts[1].strip()
             try:
@@ -2567,7 +2591,7 @@ def interactive_loop(config_path: Path):
                 break
             continue
 
-        _emit_lab("terminal ready (h=help, c=catalog, r <id>, q=quit)")
+        _emit_lab("terminal ready (h=help, c=catalog, e <id>, q=quit)")
         try:
             action = _run_terminal_path(runtime, cfg)
             if action == "quit":

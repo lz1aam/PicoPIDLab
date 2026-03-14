@@ -1,6 +1,6 @@
 # Dependencias de configuración (ES)
 
-Este documento describe combinaciones válidas de parámetros en `firmware/profile.py`.
+Este documento describe combinaciones válidas de parámetros en `firmware/config.py`.
 
 Para terminología:
 - `docs/es/GLOSARIO.md`
@@ -36,11 +36,11 @@ Para terminología:
 ### TUNING_RULE
 
 Basadas en modelo:
-- `ZN_1_P`, `ZN_1_PI`, `ZN_1_PID`
+- `ZN1_P`, `ZN1_PI`, `ZN1_PID`
 - `CC_P`, `CC_PI`, `CC_PID`
 
 Basadas en relay:
-- `ZN_2_P`, `ZN_2_PI`, `ZN_2_PID`
+- `ZN2_P`, `ZN2_PI`, `ZN2_PID`
 - `TL_P`, `TL_PI`, `TL_PID`
 
 ## Lógica de validación clave
@@ -59,7 +59,7 @@ Basadas en relay:
 ## Prioridad receta/perfil
 
 - Los parámetros de receta en `runner/lab.yaml` sobrescriben el perfil.
-- Parámetros no definidos en receta se toman de `firmware/profile.py`.
+- Parámetros no definidos en receta se toman de `firmware/config.py`.
 
 ## Recomendación práctica
 

@@ -31,7 +31,7 @@ Código:
 - `D = LPF(-Kd*d(PV)/dt)`
 
 Código:
-- `firmware/controllers.py::PIDParallelPercent.update`
+- `firmware/control.py::PIDParallelPercent.update`
 
 ### Conversión SERIES/IDEAL
 
@@ -40,7 +40,7 @@ Código:
 - `Td_eff = (Ti*Td)/(Ti + Td)`
 
 Código:
-- `firmware/builder.py::_series_to_ideal_equivalent`
+- `firmware/control.py::_series_to_ideal_equivalent`
 
 ### PID 2DOF
 
@@ -49,7 +49,7 @@ Código:
 - `P=Kp*e_p`, `I += Ki*e_i*dt`, `D=-Kd*d(PV)/dt`
 
 Código:
-- `firmware/controllers.py::PID2DOFPercent.update`
+- `firmware/control.py::PID2DOFPercent.update`
 
 ## Sintonía relay
 
@@ -61,7 +61,7 @@ Código:
 - `Pu = mean(periodo)`
 
 Código:
-- `firmware/tuning.py::run_relay_tuning`
+- `firmware/identify.py::run_relay_tuning`
 
 ### ZN2 y TL (PID)
 
@@ -70,16 +70,16 @@ Código:
 - Mapeo: `Ki=Kp/Ti`, `Kd=Kp*Td`
 
 Código:
-- `firmware/tuning.py::run_relay_tuning`
-- `firmware/tuning.py::_rule_terms`
+- `firmware/identify.py::run_relay_tuning`
+- `firmware/identify.py::_rule_terms`
 
 ## Sintonía por modelo (FOPDT)
 
 ### ZN1
 
-- `ZN_1_P:   Kc = tau/(K*theta)`
-- `ZN_1_PI:  Kc = 0.9*tau/(K*theta), Ti=3.33*theta`
-- `ZN_1_PID: Kc = 1.2*tau/(K*theta), Ti=2*theta, Td=0.5*theta`
+- `ZN1_P:   Kc = tau/(K*theta)`
+- `ZN1_PI:  Kc = 0.9*tau/(K*theta), Ti=3.33*theta`
+- `ZN1_PID: Kc = 1.2*tau/(K*theta), Ti=2*theta, Td=0.5*theta`
 - Paralelo: `Kp=Kc`, `Ki=Kc/Ti`, `Kd=Kc*Td`
 
 ### Cohen-Coon
@@ -91,8 +91,8 @@ Código:
 - `Ti`, `Td` según fórmulas implementadas de curva de reacción
 
 Código:
-- `firmware/tuning.py::_model_rule_set`
-- `firmware/tuning.py::run_model_tuning`
+- `firmware/identify.py::_model_rule_set`
+- `firmware/identify.py::run_model_tuning`
 
 ## Identificación FOPDT
 
@@ -103,8 +103,8 @@ Código:
 - Fin de escalón con condición adicional de desplazamiento
 
 Código:
-- `firmware/model.py::_wait_for_steady`
-- `firmware/model.py::run_test`
+- `firmware/identify.py::_wait_for_steady`
+- `firmware/identify.py::run_test`
 
 ### Ganancia del proceso
 
@@ -116,8 +116,8 @@ Código:
 - `y_hat(t)=y0 + K*(u1-u0)*(1-exp(-(t-theta)/tau))`, para `t>=theta`
 
 Código:
-- `firmware/model.py::_simulate_fopdt_step`
-- `firmware/model.py::run_test`
+- `firmware/identify.py::_simulate_fopdt_step`
+- `firmware/identify.py::run_test`
 
 ## Control ON/OFF
 
@@ -126,4 +126,4 @@ Código:
 - en caso contrario mantiene estado
 
 Código:
-- `firmware/controllers.py::TwoPositionPercent.update`
+- `firmware/control.py::TwoPositionPercent.update`

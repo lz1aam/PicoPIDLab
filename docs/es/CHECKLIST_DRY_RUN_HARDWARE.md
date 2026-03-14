@@ -12,11 +12,9 @@ Use esta checklist en hardware real después de cargar el firmware.
 ## Preflight de seguridad
 
 1. Ejecutar `check`.
-2. Confirmar salida: `# RESULT: check passed (profile is valid)`.
+2. Confirmar salida: `# RESULT: check passed (config is valid)`.
 3. Configurar:
    - `TEMP_CUTOFF_C 80`
-   - `SAFETY_HOLD_S 5`
-   - `SAFETY_HYST_C 2`
 4. Ejecutar `check` nuevamente.
 
 ## Dry-run de FOPDT
@@ -35,7 +33,7 @@ Use esta checklist en hardware real después de cargar el firmware.
 
 1. Configurar:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN_2_PID`
+   - `TUNING_RULE ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

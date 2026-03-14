@@ -18,7 +18,7 @@
 - `D = LPF(-Kd*d(PV)/dt)`
 
 Codice:
-- `firmware/controllers.py::PIDParallelPercent.update`
+- `firmware/control.py::PIDParallelPercent.update`
 
 ## Relay tuning
 
@@ -28,12 +28,12 @@ Codice:
 - `Pu = mean(period)`
 
 Codice:
-- `firmware/tuning.py::run_relay_tuning`
+- `firmware/identify.py::run_relay_tuning`
 
 ## Model tuning (FOPDT)
 
-- Regole `ZN_1_*`, `CC_*` con mapping parallelo (`Kp`, `Ki`, `Kd`)
+- Regole `ZN1_*`, `CC_*` con mapping parallelo (`Kp`, `Ki`, `Kd`)
 
 Codice:
-- `firmware/tuning.py::_model_rule_set`
-- `firmware/tuning.py::run_model_tuning`
+- `firmware/identify.py::_model_rule_set`
+- `firmware/identify.py::run_model_tuning`

@@ -1,12 +1,6 @@
 """Terminal command interface for runtime configuration and control."""
 import sys
-
-from builder import pid_descriptor_from_profile, pid_selection_from_profile
-
-try:
-    from machine import idle as _machine_idle
-except Exception:
-    _machine_idle = None
+from hardware import yield_cpu
 
 try:
     import uselect as _select
@@ -34,121 +28,111 @@ _COMPLEX_ASSIGN_BLOCKLIST = {"GS_TABLE", "FUZZY_RULE_TABLE"}
 _poll_err_count = 0
 
 
-def _yield_cpu() -> None:
-    if _machine_idle is not None:
-        try:
-            _machine_idle()
-        except Exception:
-            pass
-
-
 _PARAM_GROUPS = {
     "core": (
-        "General runtime settings",
+        "General settings",
         (
-            ("CONTROL_MODE", "Controller family (ONOFF/PID/FUZZY/MPC)"),
+            ("CONTROL_MODE", "ONOFF/PID/FUZZY/MPC"),
             ("SETPOINT_TYPE", "STEP or RAMP"),
-            ("SETPOINT_C", "Target temperature [°C]"),
-            ("SETPOINT_RAMP_RATE", "Ramp slope [°C/s] for RAMP mode"),
-            ("SPAN", "Engineering temperature span [°C] used by PB parameterization"),
-            ("TS_S", "Control sample period [s]"),
-            ("TELEMETRY_MODE", "Runtime telemetry output mode (INFO/NORMAL/MPC)"),
-            ("EXPERIMENT_RUN_S", "Active run duration [s], then return to READY (None = run until stop)"),
-            ("DIST_ENABLE", "Enable control-path disturbance injection"),
-            ("DIST_MODE", "Disturbance mode (STEP/PULSE)"),
-            ("DIST_MAG_PCT", "Additive disturbance on OP [%]"),
-            ("DIST_START_S", "Disturbance start time from control-run start [s]"),
-            ("DIST_DURATION_S", "Pulse disturbance duration [s]"),
+            ("SETPOINT_C", "Target [°C]"),
+            ("SETPOINT_RAMP_RATE", "Ramp rate [°C/s]"),
+            ("SPAN", "PB span [°C]"),
+            ("TS_S", "Sample period [s]"),
+            ("TELEMETRY_MODE", "INFO/NORMAL/MPC"),
+            ("EXPERIMENT_RUN_S", "Run time [s], None=until stop"),
+            ("DIST_ENABLE", "Enable disturbance"),
+            ("DIST_MODE", "STEP/PULSE"),
+            ("DIST_MAG_PCT", "Disturbance OP [%]"),
+            ("DIST_START_S", "Disturbance start [s]"),
+            ("DIST_DURATION_S", "Pulse duration [s]"),
         ),
     ),
     "safety": (
-        "Safety and plant protection",
+        "Safety",
         (
-            ("TEMP_CUTOFF_C", "Absolute high-temperature cutoff [°C]"),
-            ("SAFETY_HOLD_S", "Minimum safety hold time [s]"),
-            ("SAFETY_HYST_C", "Recovery hysteresis below cutoff [°C]"),
+            ("TEMP_CUTOFF_C", "High-temp cutoff [°C]"),
         ),
     ),
     "pid": (
-        "PID runtime settings",
+        "PID settings",
         (
             ("PID_VARIANT", "PID/2DOF/FF_PID/GAIN_SCHED/SMITH_PI"),
-            ("PID_AW_TYPE", "PID only: NONE/CLAMP/BACKCALC"),
-            ("TUNING_RULE", "ZN_1_*/CC_* (MODEL) or ZN_2_*/TL_* (RELAY)"),
-            ("PID_ALGORITHM", "IDEAL, PARALLEL, or SERIES"),
-            ("KP", "Proportional gain setting (symbol Kp)"),
-            ("KI", "Integral gain setting [1/s] (symbol Ki)"),
-            ("KD", "Derivative gain setting [s] (symbol Kd)"),
-            ("KC", "Ideal-form gain setting (symbol Kc)"),
-            ("TI_S", "Integral time setting [s] (symbol Ti; <=0 disables I in IDEAL/SERIES modes)"),
-            ("TD_S", "Derivative time setting [s] (symbol Td; <=0 disables D in IDEAL/SERIES modes)"),
-            ("DERIVATIVE_FILTER_ALPHA", "Derivative LPF alpha"),
-            ("PID_INTEGRAL_LIMIT", "Optional integral clamp"),
-            ("PID_AW_TRACKING_TIME_S", "Back-calculation anti-windup tracking time [s]"),
-            ("PID_BETA", "2DOF setpoint weight (symbol beta, range 0..1)"),
+            ("PID_AW_TYPE", "NONE/CLAMP/BACKCALC"),
+            ("TUNING_RULE", "ZN1_*/CC_* or ZN2_*/TL_*"),
+            ("PID_ALGORITHM", "IDEAL/PARALLEL/SERIES"),
+            ("KP", "Kp"),
+            ("KI", "Ki [1/s]"),
+            ("KD", "Kd [s]"),
+            ("KC", "Kc"),
+            ("TI_S", "Ti [s]"),
+            ("TD_S", "Td [s]"),
+            ("DERIVATIVE_FILTER_ALPHA", "D filter alpha"),
+            ("PID_INTEGRAL_LIMIT", "Integral clamp"),
+            ("PID_AW_TRACKING_TIME_S", "Backcalc Tt [s]"),
+            ("PID_BETA", "2DOF beta"),
             ("FF_MODE", "MANUAL or FOPDT_GAIN"),
-            ("FF_GAIN_PCT_PER_C", "Feedforward gain [%/°C]"),
-            ("FF_BIAS_PCT", "Feedforward bias [%]"),
-            ("FF_AMBIENT_C", "Ambient reference [°C], None = auto"),
+            ("FF_GAIN_PCT_PER_C", "FF gain [%/°C]"),
+            ("FF_BIAS_PCT", "FF bias [%]"),
+            ("FF_AMBIENT_C", "Ambient [°C], None=auto"),
             ("GS_VARIABLE", "Gain schedule variable (PV/SP)"),
-            ("GS_TABLE", "Gain schedule table"),
-            ("TUNING_TARGET_C", "TUNING relay target temperature [°C]"),
-            ("TUNING_BAND_C", "TUNING relay hysteresis half-band around target [°C]"),
-            ("TUNING_CYCLES", "TUNING relay cycle count"),
+            ("GS_TABLE", "Schedule table"),
+            ("TUNING_TARGET_C", "Relay target [°C]"),
+            ("TUNING_BAND_C", "Relay half-band [°C]"),
+            ("TUNING_CYCLES", "Relay cycles"),
         ),
     ),
     "onoff": (
-        "Two-position thermostat settings",
+        "ON/OFF settings",
         (
-            ("ONOFF_HYST_C", "Half-band hysteresis [°C]"),
-            ("ONOFF_ON_PERCENT", "Heater ON level [%]"),
-            ("ONOFF_MIN_SWITCH_S", "Minimum switch interval [s]"),
+            ("ONOFF_HYST_C", "Half-band [°C]"),
+            ("ONOFF_ON_PERCENT", "ON level [%]"),
+            ("ONOFF_MIN_SWITCH_S", "Min switch [s]"),
         ),
     ),
     "fuzzy": (
-        "Fuzzy controller settings",
+        "Fuzzy settings",
         (
-            ("FUZZY_E_SCALE_C", "Error full-scale [°C]"),
-            ("FUZZY_DE_SCALE_C_PER_S", "dError full-scale [°C/s]"),
-            ("FUZZY_DU_RATE_MAX", "Max output change rate [%/s]"),
-            ("FUZZY_DE_FILTER_ALPHA", "dError filter alpha"),
+            ("FUZZY_E_SCALE_C", "Error scale [°C]"),
+            ("FUZZY_DE_SCALE_C_PER_S", "dError scale [°C/s]"),
+            ("FUZZY_DU_RATE_MAX", "du max [%/s]"),
+            ("FUZZY_DE_FILTER_ALPHA", "dError alpha"),
             ("FUZZY_RULE_TABLE", "Rule matrix"),
         ),
     ),
     "mpc": (
-        "MPC-lite settings",
+        "MPC settings",
         (
-            ("MPC_HORIZON_STEPS", "Prediction horizon"),
-            ("MPC_GRID_STEP_PCT", "Candidate move grid step [%]"),
-            ("MPC_DU_MAX_PCT", "Per-step max move [%]"),
-            ("MPC_LAMBDA_MOVE", "Move suppression weight (lambda_move in MPC cost)"),
+            ("MPC_HORIZON_STEPS", "Horizon"),
+            ("MPC_GRID_STEP_PCT", "Grid step [%]"),
+            ("MPC_DU_MAX_PCT", "du max [%]"),
+            ("MPC_LAMBDA_MOVE", "Move weight"),
             ("MPC_MAX_CANDIDATES", "Candidate limit"),
-            ("MPC_OBSERVER_GAIN", "Observer correction gain L [0..1]"),
+            ("MPC_OBSERVER_GAIN", "Observer gain [0..1]"),
         ),
     ),
     "tune": (
-        "PID tuning procedure settings",
+        "Tune settings",
         (
-            ("TUNING_RULE", "ZN_1_*/CC_* (MODEL) or ZN_2_*/TL_* (RELAY)"),
-            ("TUNING_TARGET_C", "RELAY target temperature [°C]"),
-            ("TUNING_BAND_C", "RELAY hysteresis half-band [°C]"),
-            ("TUNING_CYCLES", "RELAY cycle count"),
+            ("TUNING_RULE", "ZN1_*/CC_* or ZN2_*/TL_*"),
+            ("TUNING_TARGET_C", "Relay target [°C]"),
+            ("TUNING_BAND_C", "Relay half-band [°C]"),
+            ("TUNING_CYCLES", "Relay cycles"),
         ),
     ),
     "model": (
-        "FOPDT model procedure settings",
+        "Model settings",
         (
-            ("FOPDT_U1_PERCENT", "Step heater output [%]"),
-            ("FOPDT_SMOOTH_N", "Smoothing window used by model identification"),
-            ("STEADY_WINDOW_S", "Model steady-state observation window [s]"),
-            ("STEADY_BAND_C", "Model steady-state PV half-band [°C]"),
-            ("MODEL_K", "Active model gain K [°C/%]"),
-            ("MODEL_TAU_S", "Active model tau [s]"),
-            ("MODEL_THETA_S", "Active model theta [s]"),
-            ("MODEL_U0_PCT", "Active model operating output u0 [%]"),
-            ("MODEL_Y0", "Active model operating PV y0 [°C]"),
-            ("MODEL_METHOD", "Active model method label for reports"),
-            ("MODEL_RMSE", "Active model RMSE hint for reports"),
+            ("FOPDT_U1_PERCENT", "Step output [%]"),
+            ("FOPDT_SMOOTH_N", "Smoothing window"),
+            ("STEADY_WINDOW_S", "Steady window [s]"),
+            ("STEADY_BAND_C", "Steady half-band [°C]"),
+            ("MODEL_K", "Model K [°C/%]"),
+            ("MODEL_TAU_S", "Model tau [s]"),
+            ("MODEL_THETA_S", "Model theta [s]"),
+            ("MODEL_U0_PCT", "Model u0 [%]"),
+            ("MODEL_Y0", "Model y0 [°C]"),
+            ("MODEL_METHOD", "Method label"),
+            ("MODEL_RMSE", "RMSE hint"),
         ),
     ),
 }
@@ -165,48 +149,28 @@ _ADVANCED_PARAM_KEYS = {
     "MPC_MAX_CANDIDATES",
 }
 
+_PID_ALWAYS_VISIBLE_KEYS = {"PID_VARIANT", "PID_AW_TYPE", "TUNING_RULE", "PID_ALGORITHM"}
+_PID_PARALLEL_GAIN_KEYS = {"KP", "KI", "KD"}
+_PID_IDEAL_GAIN_KEYS = {"KC", "TI_S", "TD_S"}
+_PID_FF_KEYS = {"FF_MODE", "FF_GAIN_PCT_PER_C", "FF_BIAS_PCT", "FF_AMBIENT_C"}
+_PID_GS_KEYS = {"GS_VARIABLE", "GS_TABLE"}
+_PID_RELAY_TUNING_KEYS = {"TUNING_TARGET_C", "TUNING_BAND_C", "TUNING_CYCLES"}
+_PID_SHAPING_KEYS = {"DERIVATIVE_FILTER_ALPHA", "PID_INTEGRAL_LIMIT"}
+
 _COMMAND_SPECS = (
-    ("status", "show current session status"),
-    ("control", "start control run"),
-    ("tune", "run PID tuning procedure"),
-    ("model", "run FOPDT model identification"),
-    ("monitor", "passive monitor (heater OFF)"),
-    ("params [active|all|core|safety|pid|onoff|fuzzy|mpc|tune|model]", "show runtime params"),
-    ("<PARAM> <VALUE>", "assign runtime parameter"),
-    ("<PARAM>=<VALUE>", "assign runtime parameter"),
-    ("pid report", "show active PID forms and equivalents"),
-    ("check", "validate current profile values"),
+    ("status", "show session status"),
+    ("control", "start control"),
+    ("tune", "run PID tuning"),
+    ("model", "run model ID"),
+    ("monitor", "heater-off monitor"),
+    ("params [active|all|core|safety|pid|onoff|fuzzy|mpc|tune|model]", "show params"),
+    ("<PARAM> <VALUE>", "assign parameter"),
+    ("<PARAM>=<VALUE>", "assign parameter"),
+    ("pid report", "show PID forms"),
+    ("check", "validate config"),
     ("help [commands|settings|<group>]", "show help"),
-    ("exit", "leave command prompt"),
+    ("exit", "leave prompt"),
 )
-
-_COMMAND_EXAMPLES = (
-    "params all",
-    "params pid",
-    "CONTROL_MODE PID",
-    "PID_VARIANT PID",
-    "PID_AW_TYPE CLAMP",
-    "KP 6.5",
-    "TUNING_RULE CC_PID",
-    "PID_ALGORITHM SERIES",
-    "pid report",
-    "EXPERIMENT_RUN_S None",
-)
-
-_PROMPT_COMMANDS = (
-    "status",
-    "control",
-    "tune",
-    "model",
-    "monitor",
-    "params",
-    "<PARAM> <VALUE>",
-    "pid report",
-    "check",
-    "help",
-    "exit",
-)
-
 
 def _parse_cli_value(name: str, raw: str):
     s = raw.strip()
@@ -247,6 +211,33 @@ def _format_param_value(v) -> str:
     return s if len(s) <= 100 else (s[:97] + "...")
 
 
+def _pid_param_visible_in_active_view(profile_mod, key: str) -> bool:
+    algorithm = str(profile_mod.PID_ALGORITHM).upper()
+    variant = str(profile_mod.PID_VARIANT).upper()
+    aw_type = str(profile_mod.PID_AW_TYPE).upper()
+    tuning_rule = str(profile_mod.TUNING_RULE).upper()
+
+    if key in _PID_ALWAYS_VISIBLE_KEYS:
+        return True
+    if key in _PID_PARALLEL_GAIN_KEYS:
+        return algorithm == "PARALLEL"
+    if key in _PID_IDEAL_GAIN_KEYS:
+        return algorithm in ("IDEAL", "SERIES")
+    if key == "PID_BETA":
+        return variant == "2DOF"
+    if key in _PID_FF_KEYS:
+        return variant == "FF_PID"
+    if key in _PID_GS_KEYS:
+        return variant == "GAIN_SCHED"
+    if key == "PID_AW_TRACKING_TIME_S":
+        return (variant == "PID") and (aw_type == "BACKCALC")
+    if key in _PID_RELAY_TUNING_KEYS:
+        return tuning_rule in getattr(profile_mod, "RELAY_TUNING_RULES", ())
+    if key in _PID_SHAPING_KEYS:
+        return variant in ("PID", "2DOF", "FF_PID", "GAIN_SCHED")
+    return False
+
+
 def _is_param_visible_in_active_view(profile_mod, group: str, key: str) -> bool:
     mode = str(profile_mod.CONTROL_MODE).upper()
     if group == "core":
@@ -262,31 +253,7 @@ def _is_param_visible_in_active_view(profile_mod, group: str, key: str) -> bool:
     if group == "pid":
         if mode != "PID":
             return False
-        algorithm = str(profile_mod.PID_ALGORITHM).upper()
-        variant = str(profile_mod.PID_VARIANT).upper()
-        aw_type = str(profile_mod.PID_AW_TYPE).upper()
-        tuning_rule = str(profile_mod.TUNING_RULE).upper()
-
-        always = {"PID_VARIANT", "PID_AW_TYPE", "TUNING_RULE", "PID_ALGORITHM"}
-        if key in always:
-            return True
-        if key in ("KP", "KI", "KD"):
-            return algorithm == "PARALLEL"
-        if key in ("KC", "TI_S", "TD_S"):
-            return algorithm in ("IDEAL", "SERIES")
-        if key == "PID_BETA":
-            return variant == "2DOF"
-        if key in ("FF_MODE", "FF_GAIN_PCT_PER_C", "FF_BIAS_PCT", "FF_AMBIENT_C"):
-            return variant == "FF_PID"
-        if key in ("GS_VARIABLE", "GS_TABLE"):
-            return variant == "GAIN_SCHED"
-        if key == "PID_AW_TRACKING_TIME_S":
-            return (variant == "PID") and (aw_type == "BACKCALC")
-        if key in ("TUNING_TARGET_C", "TUNING_BAND_C", "TUNING_CYCLES"):
-            return tuning_rule in ("ZN_2_P", "ZN_2_PI", "ZN_2_PID", "TL_P", "TL_PI", "TL_PID")
-        if key in ("DERIVATIVE_FILTER_ALPHA", "PID_INTEGRAL_LIMIT"):
-            return variant == "PID"
-        return False
+        return _pid_param_visible_in_active_view(profile_mod, key)
 
     if group == "onoff":
         return mode == "ONOFF"
@@ -370,9 +337,7 @@ def print_help(profile_mod, topic: str = "") -> None:
     t = str(topic or "").strip().lower()
     if t in ("", "commands", "cmd"):
         _print_command_catalog()
-        print("# INFO: examples:")
-        for ex in _COMMAND_EXAMPLES:
-            print("#   %s" % ex)
+        print("# INFO: examples: params all, KP 6.5, TUNING_RULE CC_PID, pid report")
         return
     if t in ("settings", "groups", "params"):
         print("# INFO:")
@@ -400,7 +365,7 @@ def apply_runtime_param(profile_mod, name: str, raw_value: str) -> None:
 
     old_value = getattr(profile_mod, key)
     if key in _COMPLEX_ASSIGN_BLOCKLIST:
-        print("# ERROR: assign failed: %s is structured; edit profile.py directly" % key)
+        print("# ERROR: assign failed: %s is structured; edit config.py directly" % key)
         return
     try:
         value = _parse_cli_value(key, raw_value)
@@ -444,6 +409,8 @@ def _fmt_pid_num(v, unit: str = "") -> str:
 def pid_report(profile_mod) -> None:
     """Teaching-focused PID parameter report."""
     try:
+        from control import pid_descriptor_from_profile, pid_selection_from_profile
+
         pid_sel = pid_selection_from_profile(profile_mod)
         desc = pid_descriptor_from_profile(profile_mod)
     except Exception as ex:
@@ -511,7 +478,7 @@ def wait_for_run_command(profile_mod) -> str:
         try:
             line = input("lab> ").strip()
         except EOFError:
-            _yield_cpu()
+            yield_cpu()
             continue
         except KeyboardInterrupt:
             print("\n# INFO: keyboard interrupt at prompt")
@@ -527,7 +494,7 @@ def wait_for_run_command(profile_mod) -> str:
         if cmd == "check":
             try:
                 profile_mod.validate()
-                print("# RESULT: check passed (profile is valid)")
+                print("# RESULT: check passed (config is valid)")
             except Exception as ex:
                 print("# ERROR: check failed: %s" % ex)
             continue

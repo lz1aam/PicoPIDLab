@@ -1,6 +1,6 @@
-# Anleitung zu profile.py
+# Anleitung zu config.py
 
-`firmware/profile.py` ist bewusst kompakt: nur Stellgrößen mit kurzen Effect-Kommentaren.
+`firmware/config.py` ist bewusst kompakt: nur Stellgrößen mit kurzen Effect-Kommentaren.
 Dieses Dokument enthält die ausführlichen Hinweise.
 
 ## Konventionen
@@ -8,7 +8,7 @@ Dieses Dokument enthält die ausführlichen Hinweise.
 - `PV`: gemessene Prozesstemperatur [°C]
 - `SP`: Sollwert [°C]
 - `OP`: Reglerausgang zum Heizer [%], begrenzt auf 0..100
-- Einstellungen in `profile.py` sind UPPERCASE (`KP`, `TI_S`, `SETPOINT_C`)
+- Einstellungen in `config.py` sind UPPERCASE (`KP`, `TI_S`, `SETPOINT_C`)
 - Berichte/Logs verwenden Symbole (`Kp`, `Ki`, `Kd`, `Kc`, `Ti`, `Td`, `Pb`)
 
 ## Abkürzungen
@@ -29,14 +29,14 @@ Dieses Dokument enthält die ausführlichen Hinweise.
 - `PID_VARIANT="2DOF"`: benötigt `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="FF_PID"`: benötigt `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="SMITH_PI"`: benötigt aktive `MODEL_*` und PI-Gains (`Kp!=0`, `Ki>0`)
-- Modellregeln (`ZN_1_*`, `CC_*`) -> `tune` modellbasiert
-- Relayregeln (`ZN_2_*`, `TL_*`) -> `tune` relaybasiert
+- Modellregeln (`ZN1_*`, `CC_*`) -> `tune` modellbasiert
+- Relayregeln (`ZN2_*`, `TL_*`) -> `tune` relaybasiert
 
 ## Schnellübungen
 
 - Windup-Demo: `PID_AW_TYPE="NONE"` vs `"CLAMP"`
-- Relay-Tuning: `TUNING_RULE="ZN_2_PID"`
-- Modell-Tuning: `TUNING_RULE="CC_PID"` oder `ZN_1_PID`
+- Relay-Tuning: `TUNING_RULE="ZN2_PID"`
+- Modell-Tuning: `TUNING_RULE="CC_PID"` oder `ZN1_PID`
 - Algorithmusform: `PID_ALGORITHM` wechseln und `pid report` vergleichen
 
 ## Modusspezifische Hinweise

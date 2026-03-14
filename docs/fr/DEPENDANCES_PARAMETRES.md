@@ -18,10 +18,10 @@
 ### TUNING_RULE
 
 Basé modèle:
-- `ZN_1_*`, `CC_*`
+- `ZN1_*`, `CC_*`
 
 Basé relay:
-- `ZN_2_*`, `TL_*`
+- `ZN2_*`, `TL_*`
 
 ## TELEMETRY_MODE
 

@@ -13,7 +13,7 @@
 #
 # Parameter precedence (important):
 # 1) Recipe params from this file are sent to firmware before each run.
-# 2) Existing values in firmware/profile.py are used only for params not set in recipe.
+# 2) Existing values in firmware/config.py are used only for params not set in recipe.
 # 3) Therefore, for recipe-driven labs treat this file as the active source of truth.
 #
 # Editing workflow:
@@ -126,7 +126,7 @@ metrics:
 # Recommended valid recipe combinations:
 # - ONOFF/PID/FUZZY/MPC tracking labs: kind=standard + EXPERIMENT_RUN_S in params
 # - FOPDT identification: kind=fopdt
-# - PID relay tuning: kind=tuning + CONTROL_MODE=PID + relay-family TUNING_RULE (ZN_2_*/TL_*)
+# - PID relay tuning: kind=tuning + CONTROL_MODE=PID + relay-family TUNING_RULE (ZN2_*/TL_*)
 # - parameter sweep: kind=sweep + sweep.grid
 #
 # Telemetry verbosity in firmware (optional per recipe via params):
@@ -218,7 +218,7 @@ experiments:
       TELEMETRY_MODE: NORMAL
       PID_VARIANT: PID
       PID_AW_TYPE: CLAMP
-      TUNING_RULE: ZN_2_PID
+      TUNING_RULE: ZN2_PID
       TUNING_TARGET_C: 50.0
       TUNING_BAND_C: 1.0
       TUNING_CYCLES: 5
@@ -383,11 +383,11 @@ experiments:
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
       DIST_DURATION_S: 20.0
-      MPC_HORIZON_STEPS: 100
-      MPC_GRID_STEP_PCT: 2.0
-      MPC_MAX_CANDIDATES: 41
-      MPC_DU_MAX_PCT: 2.5
-      MPC_LAMBDA_MOVE: 0.1
+      MPC_HORIZON_STEPS: 24
+      MPC_GRID_STEP_PCT: 5.0
+      MPC_MAX_CANDIDATES: 11
+      MPC_DU_MAX_PCT: 15.0
+      MPC_LAMBDA_MOVE: 0.02
       MPC_OBSERVER_GAIN: 0.5
 
   # [11] SMITH_PI_STEP_TRACKING

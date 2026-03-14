@@ -1,6 +1,6 @@
-# Guida a profile.py
+# Guida a config.py
 
-`firmware/profile.py` contiene solo i parametri didattici modificabili dallo studente.
+`firmware/config.py` contiene solo i parametri didattici modificabili dallo studente.
 
 ## Flusso consigliato
 

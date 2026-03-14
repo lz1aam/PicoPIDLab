@@ -12,11 +12,9 @@ Diese Checkliste wird auf realer Hardware nach dem Flashen verwendet.
 ## Sicherheits-Vorprüfung
 
 1. `check` ausführen.
-2. Ausgabe muss enthalten: `# RESULT: check passed (profile is valid)`.
+2. Ausgabe muss enthalten: `# RESULT: check passed (config is valid)`.
 3. Setzen:
    - `TEMP_CUTOFF_C 80`
-   - `SAFETY_HOLD_S 5`
-   - `SAFETY_HYST_C 2`
 4. `check` erneut ausführen.
 
 ## FOPDT-Dry-Run
@@ -35,7 +33,7 @@ Diese Checkliste wird auf realer Hardware nach dem Flashen verwendet.
 
 1. Konfigurieren:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN_2_PID`
+   - `TUNING_RULE ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

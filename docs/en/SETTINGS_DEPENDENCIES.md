@@ -19,7 +19,7 @@ These apply in all modes:
 - `TS_S`
 - `TELEMETRY_MODE` (`INFO` | `NORMAL` | `MPC`)
 - `DIST_ENABLE`, `DIST_MODE`, `DIST_MAG_PCT`, `DIST_START_S`, `DIST_DURATION_S`
-- `TEMP_CUTOFF_C`, `SAFETY_HOLD_S`, `SAFETY_HYST_C`
+- `TEMP_CUTOFF_C`
 - `INDICATOR_SP_NEAR_ZERO_TOL_C`, `INDICATOR_BAND_C`, `INDICATOR_TIGHT_BAND_C`
 
 ## 2) Mode switch map
@@ -70,17 +70,17 @@ These apply in all modes:
 
 Only active when `CONTROL_MODE="PID"` and `tune` command is executed.
 
-- `TUNING_RULE` in relay family (`ZN_2_*`, `TL_*`):
+- `TUNING_RULE` in relay family (`ZN2_*`, `TL_*`):
   - `tune` command runs relay tuning instead of control tracking
   - performs relay test (`Ku`, `Pu`)
   - valid `TUNING_RULE` values:
-    - `ZN_2_P`, `ZN_2_PI`, `ZN_2_PID`
+    - `ZN2_P`, `ZN2_PI`, `ZN2_PID`
     - `TL_P`, `TL_PI`, `TL_PID`
   - selected gains are written to active runtime values (`KP/KI/KD` and derived `KC/TI_S/TD_S`)
-- `TUNING_RULE` in model family (`ZN_1_*`, `CC_*`):
+- `TUNING_RULE` in model family (`ZN1_*`, `CC_*`):
   - `tune` command runs model-based tuning using active FOPDT model values (`MODEL_*`)
   - valid rule namespace:
-    - `ZN_1_P`, `ZN_1_PI`, `ZN_1_PID`
+    - `ZN1_P`, `ZN1_PI`, `ZN1_PID`
     - `CC_P`, `CC_PI`, `CC_PID`
 
 Relay tuning behavior settings:
@@ -143,5 +143,5 @@ Active when `model` command is executed:
 - `params` (active groups)
 - `params all` (full catalog)
 - `params pid` (PID-only view)
-- `check` (validate current runtime profile)
+- `check` (validate current runtime config)
 - `pid report` (teaching report with algorithm/input/mode info)

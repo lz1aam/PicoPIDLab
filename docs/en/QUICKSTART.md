@@ -1,6 +1,6 @@
 # Quick Start
 
-Version target: **v1.2.6** (2026-03-07)
+Version target: **v1.2.8** (2026-03-14)
 
 This guide covers both supported workflows:
 - **Thonny workflow** (direct firmware terminal)
@@ -55,7 +55,7 @@ Typical command sequence:
 
 1. `check`
 2. `status`
-3. `params` / `params pid` / `params model` / `params tuning`
+3. `params` / `params pid` / `params model` / `params tune`
 4. run command:
    - `control` (closed-loop control)
    - `tune` (parameter tuning from selected `TUNING_RULE`)
@@ -101,7 +101,7 @@ After connect/sync the host enters `lab>` directly.
 
 - `h` help
 - `c` catalog
-- `r <id|exp_id>` run recipe
+- `e <id|exp_id>` run experiment
 - `s` stop active run
 - `k` firmware `check`
 - `u` host status
@@ -138,7 +138,7 @@ Typical contents:
 ## 5. Recipe System (`runner/lab.yaml`)
 
 `runner/lab.yaml` is the host-side source of truth for exercises.
-`firmware/profile.py` is fallback for parameters not overridden by recipe.
+`firmware/config.py` is fallback for parameters not overridden by recipe.
 
 Recipe kinds:
 - `standard` fixed-duration run
@@ -168,11 +168,9 @@ Before any run:
 
 1. `check`
 2. Confirm:
-   - `# RESULT: check passed (profile is valid)`
-3. Verify safety settings in `profile.py`:
+   - `# RESULT: check passed (config is valid)`
+3. Verify safety settings in `config.py`:
    - `TEMP_CUTOFF_C`
-   - `SAFETY_HOLD_S`
-   - `SAFETY_HYST_C`
 
 On cutoff or fatal condition:
 - heater is forced OFF
@@ -195,7 +193,7 @@ On cutoff or fatal condition:
 
 ### Plot/metrics window does not stay open
 
-- Ensure an active run is started (`control`, `model`, `tune`, `monitor`, or `r <id>`)
+- Ensure an active run is started (`control`, `model`, `tune`, `monitor`, or `e <id>`)
 - Do not close windows before run starts
 
 ### Unexpected command behavior
@@ -211,4 +209,4 @@ On cutoff or fatal condition:
 - `docs/en/SETTINGS_DEPENDENCIES.md`
 - `docs/en/REPORTING_STYLE.md`
 - `docs/en/CONTROL_FORMULAS.md`
-- `docs/en/PROFILE_TUTORIAL.md`
+- `docs/en/CONFIG_TUTORIAL.md`

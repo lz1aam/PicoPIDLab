@@ -1,6 +1,6 @@
-# Guía de profile.py
+# Guía de config.py
 
-`firmware/profile.py` es intencionalmente compacto: solo parámetros con comentarios Effect breves.
+`firmware/config.py` es intencionalmente compacto: solo parámetros con comentarios Effect breves.
 Este documento contiene la guía extendida.
 
 ## Convenciones
@@ -8,7 +8,7 @@ Este documento contiene la guía extendida.
 - `PV`: temperatura medida del proceso [°C]
 - `SP`: valor de referencia [°C]
 - `OP`: salida del controlador al calentador [%], limitada a 0..100
-- Los parámetros de `profile.py` se escriben en mayúsculas (`KP`, `TI_S`, `SETPOINT_C`)
+- Los parámetros de `config.py` se escriben en mayúsculas (`KP`, `TI_S`, `SETPOINT_C`)
 - Reportes/logs usan símbolos (`Kp`, `Ki`, `Kd`, `Kc`, `Ti`, `Td`, `Pb`)
 
 ## Abreviaturas
@@ -29,14 +29,14 @@ Este documento contiene la guía extendida.
 - `PID_VARIANT="2DOF"`: requiere `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="FF_PID"`: requiere `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="SMITH_PI"`: requiere `MODEL_*` activos y ganancias PI (`Kp!=0`, `Ki>0`)
-- Reglas de modelo (`ZN_1_*`, `CC_*`) -> `tune` basado en modelo
-- Reglas relay (`ZN_2_*`, `TL_*`) -> `tune` por relay
+- Reglas de modelo (`ZN1_*`, `CC_*`) -> `tune` basado en modelo
+- Reglas relay (`ZN2_*`, `TL_*`) -> `tune` por relay
 
 ## Ejercicios rápidos
 
 - Demo de windup: `PID_AW_TYPE="NONE"` vs `"CLAMP"`
-- Sintonía relay: `TUNING_RULE="ZN_2_PID"`
-- Sintonía por modelo: `TUNING_RULE="CC_PID"` o `ZN_1_PID`
+- Sintonía relay: `TUNING_RULE="ZN2_PID"`
+- Sintonía por modelo: `TUNING_RULE="CC_PID"` o `ZN1_PID`
 - Forma algorítmica: cambiar `PID_ALGORITHM` y comparar `pid report`
 
 ## Notas por modo

@@ -1,6 +1,6 @@
 # Avvio rapido
 
-Versione target: **v1.2.6**
+Versione target: **v1.2.8**
 
 Workflow supportati:
 - Thonny (terminale firmware diretto)
@@ -26,7 +26,7 @@ Caricare `firmware/*` sulla scheda.
 python3 runner/lab.py
 ```
 
-Comandi host: `h`, `c`, `r <id>`, `s`, `k`, `u`, `x`, `b`, `q`.
+Comandi host: `h`, `c`, `e <id>`, `s`, `k`, `u`, `x`, `b`, `q`.
 
 Output run:
 - `runner/runs/<timestamp>__<EXPERIMENT>__<shortname>/`

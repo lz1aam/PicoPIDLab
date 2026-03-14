@@ -12,11 +12,9 @@ Use this on real hardware after flashing current firmware files.
 ## Global safety preflight
 
 1. Run `check`.
-2. Confirm output contains `# RESULT: check passed (profile is valid)`.
+2. Confirm output contains `# RESULT: check passed (config is valid)`.
 3. Run:
    - `TEMP_CUTOFF_C 80`
-   - `SAFETY_HOLD_S 5`
-   - `SAFETY_HYST_C 2`
 4. Run `check` again.
 
 ## FOPDT path dry-run
@@ -35,7 +33,7 @@ Use this on real hardware after flashing current firmware files.
 
 1. Configure:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN_2_PID`
+   - `TUNING_RULE ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

@@ -1,6 +1,6 @@
 # Abhängigkeiten der Einstellungen (DE)
 
-Dieses Dokument beschreibt gültige Kombinationen von Parametern in `firmware/profile.py`.
+Dieses Dokument beschreibt gültige Kombinationen von Parametern in `firmware/config.py`.
 
 Für Begriffe siehe:
 - `docs/de/GLOSSAR.md`
@@ -36,11 +36,11 @@ Für Begriffe siehe:
 ### TUNING_RULE
 
 Modellbasiert:
-- `ZN_1_P`, `ZN_1_PI`, `ZN_1_PID`
+- `ZN1_P`, `ZN1_PI`, `ZN1_PID`
 - `CC_P`, `CC_PI`, `CC_PID`
 
 Relaybasiert:
-- `ZN_2_P`, `ZN_2_PI`, `ZN_2_PID`
+- `ZN2_P`, `ZN2_PI`, `ZN2_PID`
 - `TL_P`, `TL_PI`, `TL_PID`
 
 ## Wichtige Validierungslogik
@@ -59,7 +59,7 @@ Relaybasiert:
 ## Rezept- und Profil-Priorität
 
 - In `runner/lab.yaml` gesetzte Rezeptparameter überschreiben Profilwerte.
-- Nicht gesetzte Parameter werden aus `firmware/profile.py` übernommen.
+- Nicht gesetzte Parameter werden aus `firmware/config.py` übernommen.
 
 ## Praxisempfehlung
 

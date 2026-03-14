@@ -1,6 +1,6 @@
 # PicoPID Lab (MicroPython, RP2040)
 
-Current version: **v1.2.6** (2026-03-06)
+Current version: **v1.2.8** (2026-03-14)
 
 PicoPID Lab is an open-source educational platform for university control-systems courses.  
 Students experiment with ON/OFF, PID, Fuzzy, and MPC algorithms on real hardware (RP2040-based thermal plant), then compare controller performance through telemetry, metrics, and plots.
@@ -17,7 +17,7 @@ Documentation language folders:
 - `docs/fr/` (French)
 
 Students primarily edit one file:
-- `firmware/profile.py`
+- `firmware/config.py`
 
 Core observed variables:
 - `PV` measured temperature [°C]
@@ -27,8 +27,8 @@ Core observed variables:
 ## Project Layout
 
 - `firmware/` firmware modules on device
-- `runner/lab.py` host lab terminal + recipe runner
-- `runner/lab.yaml` host recipe/config source of truth
+- `runner/lab.py` host lab terminal + experiment runner
+- `runner/lab.yaml` host experiment/config source of truth
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ Core observed variables:
 2. Upload files from `firmware/` to board root.
 3. Install host dependencies:
    - `pip install pyserial pyyaml matplotlib numpy`
-4. Edit recipes in `runner/lab.yaml`.
+4. Edit experiments in `runner/lab.yaml`.
 5. Start host interface:
    - `python3 runner/lab.py`
 
@@ -46,7 +46,7 @@ After connect, the runner enters `lab>` directly.
 
 - `h` help
 - `c` catalog
-- `r <id|exp_id>` run recipe
+- `e <id|exp_id>` run experiment
 - `s` stop active firmware run
 - `k` firmware `check`
 - `u` host status
@@ -73,7 +73,7 @@ At firmware prompt (`lab>`), typical commands:
 
 ## Supported Control Modes
 
-Set in `firmware/profile.py`:
+Set in `firmware/config.py`:
 
 - `CONTROL_MODE = "ONOFF"`
 - `CONTROL_MODE = "PID"`
@@ -84,8 +84,8 @@ For PID family:
 - `PID_VARIANT`: `PID`, `2DOF`, `FF_PID`, `GAIN_SCHED`, `SMITH_PI`
 - `PID_ALGORITHM`: `PARALLEL`, `IDEAL`, `SERIES`
 - `TUNING_RULE`:
-  - model-based: `ZN_1_*`, `CC_*`
-  - relay-based: `ZN_2_*`, `TL_*`
+  - model-based: `ZN1_*`, `CC_*`
+  - relay-based: `ZN2_*`, `TL_*`
 
 ## Two Workflows
 
@@ -97,14 +97,14 @@ For PID family:
 
 ### B) Host lab workflow (`runner/lab.py`)
 
-- Recipe-driven runs from `runner/lab.yaml`
+- Experiment-driven runs from `runner/lab.yaml`
 - Automatic run folders with telemetry CSV/log/metrics
 - Best for report-grade repeatable experiments
 
 Run artifacts:
 - `runner/runs/<timestamp>__<EXPERIMENT>__<shortname>/`
 
-## Recipe Kinds (`runner/lab.yaml`)
+## Experiment Kinds (`runner/lab.yaml`)
 
 - `standard` fixed-duration tracking run
 - `fopdt` open-loop model identification
@@ -133,15 +133,12 @@ PV:25.3 SP:30.0 OP:45.0 YH:25.1 YP:26.4
 
 ## Safety
 
-Configured in `firmware/profile.py`:
+Configured in `firmware/config.py`:
 - `TEMP_CUTOFF_C`
-- `SAFETY_HOLD_S`
-- `SAFETY_HYST_C`
 
 At cutoff:
 - heater forced OFF
-- hold active for minimum hold time
-- recovery only after cooldown below hysteresis threshold
+- active run aborted immediately
 
 ## Reporting Style
 

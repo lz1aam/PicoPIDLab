@@ -7,38 +7,18 @@ This file coordinates:
 - heater output (% -> PWM)
 - WS2812 status LED
 
-Students typically only edit: profile.py
+Students typically only edit: config.py
 """
 
 import time
 import gc
 import math
 
-from sensor import NTCLG100E2103JB
-from actuator import Heater
-from indicator import StatusRGB
-import profile as P
+from hardware import NTCLG100E2103JB, Heater, StatusRGB, yield_cpu, advance_deadline
+import config as P
 from cli import wait_for_run_command, poll_command_nonblocking
-from builder import (
-    build_controller,
-    pid_descriptor_from_profile,
-    pid_selection_from_profile,
-    pid_forms_from_gains,
-)
-from model import (
-    run_test as run_model_test,
-    set_model_values,
-    load_effective_model,
-)
-from tuning import run_relay_tuning, run_model_tuning, tuning_rule_label
 
-_FIRMWARE_VERSION = "1.2.6"
-
-try:
-    from machine import idle as _machine_idle
-except Exception:
-    _machine_idle = None
-
+_FIRMWARE_VERSION = "1.2.8"
 
 def _isfinite(x) -> bool:
     try:
@@ -47,33 +27,75 @@ def _isfinite(x) -> bool:
         return False
 
 
-def _yield_cpu() -> None:
-    if _machine_idle is not None:
-        try:
-            _machine_idle()
-        except Exception:
-            pass
+def _tuning_rule_label(code: str) -> str:
+    rule = str(code).upper()
+    if rule.startswith("ZN1_"):
+        family = "Ziegler-Nichols 1"
+    elif rule.startswith("ZN2_"):
+        family = "Ziegler-Nichols 2"
+    elif rule.startswith("CC_"):
+        family = "Cohen-Coon"
+    elif rule.startswith("TL_"):
+        family = "Tyreus-Luyben"
+    else:
+        return str(code)
+    mode = rule.split("_", 1)[-1]
+    return "%s (%s)" % (family, mode)
 
 
-def _advance_deadline(next_ms: int, period_ms: int, now_ms: int, max_lag_periods: int = 3) -> int:
-    """Advance a periodic deadline without accumulating an unbounded backlog."""
-    lag_ms = time.ticks_diff(now_ms, next_ms)
-    max_lag_ms = int(max(1, max_lag_periods) * int(period_ms))
-    if lag_ms > max_lag_ms:
-        return time.ticks_add(now_ms, int(period_ms))
-    return time.ticks_add(next_ms, int(period_ms))
-
-
-def _telemetry_mode() -> str:
-    mode = str(P.TELEMETRY_MODE).upper()
+def _telemetry_mode(profile_mod=P) -> str:
+    mode = str(profile_mod.TELEMETRY_MODE).upper()
     return mode if mode in ("INFO", "NORMAL", "MPC") else "NORMAL"
 
 
-def _emit_telemetry_line(pv_c: float, sp_c: float, op_pct: float, y_hat=None, y_pred=None) -> None:
-    mode = _telemetry_mode()
+def _snapshot_header_config(profile_mod):
+    control_mode = str(profile_mod.CONTROL_MODE).upper()
+    setpoint_type = str(profile_mod.SETPOINT_TYPE).upper()
+    telemetry_mode = _telemetry_mode(profile_mod)
+    exp_run_s = profile_mod.EXPERIMENT_RUN_S
+    return {
+        "control_mode": control_mode,
+        "setpoint_type": setpoint_type,
+        "telemetry_mode": telemetry_mode,
+        "ts_s": float(profile_mod.TS_S),
+        "exp_run_s": exp_run_s,
+        "exp_timer_enabled": (exp_run_s is not None) and (float(exp_run_s) > 0.0),
+        "setpoint_c_text": str(profile_mod.SETPOINT_C),
+        "ramp_rate": float(profile_mod.SETPOINT_RAMP_RATE),
+        "pid_rule": str(profile_mod.TUNING_RULE).upper(),
+        "pid_variant": str(profile_mod.PID_VARIANT).upper(),
+        "pid_aw_type": str(profile_mod.PID_AW_TYPE).upper(),
+        "pid_algorithm": str(profile_mod.PID_ALGORITHM).upper(),
+        "kp": float(profile_mod.KP),
+        "ki": float(profile_mod.KI),
+        "kd": float(profile_mod.KD),
+        "kc": float(profile_mod.KC),
+        "ti_s": float(profile_mod.TI_S),
+        "td_s": float(profile_mod.TD_S),
+        "fuzzy_e_scale_c": float(profile_mod.FUZZY_E_SCALE_C),
+        "fuzzy_de_scale_c_per_s": float(profile_mod.FUZZY_DE_SCALE_C_PER_S),
+        "fuzzy_du_rate_max": float(profile_mod.FUZZY_DU_RATE_MAX),
+        "fuzzy_de_filter_alpha": float(profile_mod.FUZZY_DE_FILTER_ALPHA),
+        "mpc_horizon_steps": int(profile_mod.MPC_HORIZON_STEPS),
+        "mpc_grid_step_pct": float(profile_mod.MPC_GRID_STEP_PCT),
+        "mpc_du_max_pct": float(profile_mod.MPC_DU_MAX_PCT),
+        "mpc_lambda_move": float(profile_mod.MPC_LAMBDA_MOVE),
+    }
+
+
+def _emit_telemetry_line(
+    pv_c: float,
+    sp_c: float,
+    op_pct: float,
+    telemetry_mode: str,
+    control_mode: str,
+    y_hat=None,
+    y_pred=None,
+) -> None:
+    mode = str(telemetry_mode).upper()
     if mode == "INFO":
         return
-    if (mode == "MPC") and (str(P.CONTROL_MODE).upper() == "MPC") and (y_hat is not None) and (y_pred is not None):
+    if (mode == "MPC") and (str(control_mode).upper() == "MPC") and (y_hat is not None) and (y_pred is not None):
         print("PV:%.1f SP:%.1f OP:%.1f YH:%.1f YP:%.1f" % (float(pv_c), float(sp_c), float(op_pct), float(y_hat), float(y_pred)))
         return
     print("PV:%.1f SP:%.1f OP:%.1f" % (float(pv_c), float(sp_c), float(op_pct)))
@@ -87,19 +109,6 @@ def _update_setpoint(setpoint_c: float, sp_current: float, is_ramp: bool, ramp_r
     if abs(diff) <= max_step:
         return float(setpoint_c)
     return float(sp_current + (max_step if diff > 0.0 else -max_step))
-
-
-def _emit_telemetry_line_timed(pv_c: float, sp_c: float, op_pct: float, last_emit_ms: int, emit_period_ms: int) -> int:
-    if _telemetry_mode() == "INFO":
-        return int(last_emit_ms)
-    pv_val = float(pv_c)
-    if not _isfinite(pv_val):
-        return int(last_emit_ms)
-    now_ms = time.ticks_ms()
-    if time.ticks_diff(now_ms, last_emit_ms) < int(emit_period_ms):
-        return int(last_emit_ms)
-    print("PV:%.1f SP:%.1f OP:%.1f" % (pv_val, float(sp_c), float(op_pct)))
-    return int(now_ms)
 
 
 def _compute_dt_s(now_ms: int, last_exec_ms: int, default_dt_s: float, dt_max_s=None) -> float:
@@ -125,7 +134,7 @@ def _yield_until_next(next_ui_ms: int, next_ctrl_ms: int, now_ms: int) -> None:
     dt_ui = time.ticks_diff(next_ui_ms, now_ms)
     dt_ctrl = time.ticks_diff(next_ctrl_ms, now_ms)
     if (dt_ui if dt_ui < dt_ctrl else dt_ctrl) > 0:
-        _yield_cpu()
+        yield_cpu()
 
 
 def _handle_control_command(cmd: str):
@@ -157,7 +166,7 @@ def _drain_queued_commands(max_cmds: int = 12) -> None:
         print("# INFO: discarded %d queued command(s) before READY" % int(dropped))
 
 
-def _make_run_abort_cb(run_label: str):
+def _make_run_abort_cb(run_label: str, run_state: dict):
     """Main-owned command handler for blocking algorithm runs."""
     def _cb():
         cmd = poll_command_nonblocking()
@@ -165,10 +174,7 @@ def _make_run_abort_cb(run_label: str):
             return False
         if cmd in ("stop", "restart"):
             print("# INFO: stop command received -> %s aborted" % str(run_label))
-            try:
-                P._RUN_ABORTED = True
-            except Exception:
-                pass
+            run_state["aborted"] = True
             return True
         if cmd in ("help", "?"):
             print("# INFO: %s commands: stop, restart, help" % str(run_label))
@@ -189,25 +195,15 @@ def _make_overtemp_cb(cutoff_c: float):
     return _cb
 
 
-def _activate_safety(now_ms: int, safety_hold_ms: int, controller_reset, heater_off) -> int:
-    controller_reset()
-    heater_off()
-    return time.ticks_add(now_ms, int(safety_hold_ms))
-
-
-def _safety_can_clear(now_ms: int, safety_until_ms: int, pv_valid: bool, temp_raw: float, cool_threshold_c: float) -> bool:
-    if not pv_valid:
-        return False
-    if time.ticks_diff(now_ms, safety_until_ms) < 0:
-        return False
-    return float(temp_raw) <= float(cool_threshold_c)
-
-
 def _shutdown_outputs(heater, indicator, done: bool = False) -> None:
     heater.off()
     indicator.off()
     if done:
         print("# FINISH: done")
+
+
+def _new_run_state() -> dict:
+    return {"aborted": False}
 
 
 def _print_info_block(lines) -> None:
@@ -218,102 +214,202 @@ def _print_info_block(lines) -> None:
     print("# ========================================")
 
 
-def _collect_banner_lines():
-    control_mode = str(P.CONTROL_MODE).upper()
-    setpoint_type = str(P.SETPOINT_TYPE).upper()
+def _collect_banner_lines(cfg):
+    control_mode = cfg["control_mode"]
+    telemetry_mode = cfg["telemetry_mode"]
     lines = [
         "PicoPID Lab v%s" % _FIRMWARE_VERSION,
         "control mode: %s" % control_mode,
-        "setpoint mode: %s" % setpoint_type,
+        "setpoint mode: %s" % cfg["setpoint_type"],
     ]
-    exp_run_s = P.EXPERIMENT_RUN_S
-    exp_timer_enabled = (exp_run_s is not None) and (float(exp_run_s) > 0.0)
+    exp_run_s = cfg["exp_run_s"]
+    exp_timer_enabled = bool(cfg["exp_timer_enabled"])
     run_s_txt = ("%.1f" % float(exp_run_s)) if exp_timer_enabled else "none"
     lines.append(
         "runtime context: telemetry=%s Ts=%.3fs run_s=%s"
         % (
-            _telemetry_mode(),
-            float(P.TS_S),
+            telemetry_mode,
+            float(cfg["ts_s"]),
             run_s_txt,
         )
     )
 
     if control_mode == "PID":
-        rule = str(P.TUNING_RULE).upper()
-        lines.append("tuning rule: %s" % tuning_rule_label(rule))
-        try:
-            pid_sel = pid_selection_from_profile(P)
-            v = str(pid_sel.get("variant", "PID")).upper()
-            aw = str(pid_sel.get("aw_type", "CLAMP")).upper()
-            if v == "PID":
-                lines.append("PID variant: PID (AW=%s)" % aw)
-            else:
-                lines.append("PID variant: %s" % v)
-        except Exception:
-            lines.append("PID variant: %s" % str(P.PID_VARIANT).upper())
-        lines.append("PID algorithm: %s" % str(P.PID_ALGORITHM).upper())
-        try:
-            pid_desc = pid_descriptor_from_profile(P)
-            algorithm = str(pid_desc.get("algorithm", "PARALLEL")).upper()
-            configured = pid_desc.get("configured", {})
-            if algorithm == "PARALLEL":
-                lines.append("PID configured params: Kp=%.4g Ki=%.4g Kd=%.4g"
-                             % (float(configured.get("KP", 0.0)),
-                                float(configured.get("KI", 0.0)),
-                                float(configured.get("KD", 0.0))))
-            else:
-                lines.append("PID configured params: Kc=%.4g Ti=%.4gs Td=%.4gs"
-                             % (float(configured.get("KC", 0.0)),
-                                float(configured.get("TI_S", 0.0)),
-                                float(configured.get("TD_S", 0.0))))
-        except Exception:
-            # Keep banner resilient even if validation catches a bad profile later.
-            pass
-
-    if control_mode == "FUZZY":
-        lines.append("fuzzy inputs: e, de/dt (Sugeno)")
-        lines.append("fuzzy scales: E=%.3f °C  dE=%.3f °C/s"
-                     % (P.FUZZY_E_SCALE_C, P.FUZZY_DE_SCALE_C_PER_S))
-        lines.append("fuzzy output shaping: du_rate_max=%.2f%%/s  de_alpha=%.2f"
-                     % (P.FUZZY_DU_RATE_MAX, P.FUZZY_DE_FILTER_ALPHA))
-
-    if control_mode == "MPC":
-        lines.append("MPC config: horizon=%d  grid_step=%.1f%%  du_max=%.1f%%  lambda=%.3f"
-                     % (int(P.MPC_HORIZON_STEPS),
-                        float(P.MPC_GRID_STEP_PCT),
-                        float(P.MPC_DU_MAX_PCT),
-                        float(P.MPC_LAMBDA_MOVE)))
-        if _telemetry_mode() == "MPC":
-            lines.append("MPC telemetry fields: YH=one-step estimate, YP=horizon-end prediction")
+        lines.append("tuning rule: %s" % _tuning_rule_label(cfg["pid_rule"]))
+    lines.extend(_mode_banner_lines_from_snapshot(cfg, telemetry_mode))
     return lines
 
 
 def _print_session_header():
-    control_mode = str(P.CONTROL_MODE).upper()
-    setpoint_type = str(P.SETPOINT_TYPE).upper()
-    lines = _collect_banner_lines()
-    lines.append("setpoint target: %s °C (%s)" % (str(P.SETPOINT_C), setpoint_type))
+    cfg = _snapshot_header_config(P)
+    control_mode = cfg["control_mode"]
+    setpoint_type = cfg["setpoint_type"]
+    telemetry_mode = cfg["telemetry_mode"]
+    lines = _collect_banner_lines(cfg)
+    lines.append("setpoint target: %s °C (%s)" % (cfg["setpoint_c_text"], setpoint_type))
     if setpoint_type == "RAMP":
-        lines.append("ramp rate: %.2f °C/s" % P.SETPOINT_RAMP_RATE)
-    tmode = _telemetry_mode()
-    if tmode == "INFO":
+        lines.append("ramp rate: %.2f °C/s" % cfg["ramp_rate"])
+    if telemetry_mode == "INFO":
         lines.append("telemetry fields: status lines only")
-    elif (tmode == "MPC") and (control_mode == "MPC"):
+    elif (telemetry_mode == "MPC") and (control_mode == "MPC"):
         lines.append("telemetry fields: PV[°C], SP[°C], OP[%], YH[°C], YP[°C]")
     else:
         lines.append("telemetry fields: PV[°C], SP[°C], OP[%]")
     _print_info_block(lines)
 
 
-def _run_monitor_loop(sensor, heater, indicator):
+def _mode_banner_lines_from_snapshot(cfg, telemetry_mode: str):
+    control_mode = str(cfg["control_mode"]).upper()
+    if control_mode == "PID":
+        lines = []
+        variant = str(cfg["pid_variant"]).upper()
+        aw_type = str(cfg["pid_aw_type"]).upper()
+        algorithm = str(cfg["pid_algorithm"]).upper()
+
+        if variant == "PID":
+            lines.append("PID variant: PID (AW=%s)" % aw_type)
+        else:
+            lines.append("PID variant: %s" % variant)
+        lines.append("PID algorithm: %s" % algorithm)
+
+        if algorithm == "PARALLEL":
+            lines.append(
+                "PID configured params: Kp=%.4g Ki=%.4g Kd=%.4g"
+                % (
+                    float(cfg["kp"]),
+                    float(cfg["ki"]),
+                    float(cfg["kd"]),
+                )
+            )
+        else:
+            lines.append(
+                "PID configured params: Kc=%.4g Ti=%.4gs Td=%.4gs"
+                % (
+                    float(cfg["kc"]),
+                    float(cfg["ti_s"]),
+                    float(cfg["td_s"]),
+                )
+            )
+        return lines
+
+    lines = []
+    if control_mode == "FUZZY":
+        lines.append("fuzzy inputs: e, de/dt (Sugeno)")
+        lines.append(
+            "fuzzy scales: E=%.3f °C  dE=%.3f °C/s"
+            % (float(cfg["fuzzy_e_scale_c"]), float(cfg["fuzzy_de_scale_c_per_s"]))
+        )
+        lines.append(
+            "fuzzy output shaping: du_rate_max=%.2f%%/s  de_alpha=%.2f"
+            % (float(cfg["fuzzy_du_rate_max"]), float(cfg["fuzzy_de_filter_alpha"]))
+        )
+        return lines
+
+    if control_mode == "MPC":
+        lines.append(
+            "MPC config: horizon=%d  grid_step=%.1f%%  du_max=%.1f%%  lambda=%.3f"
+            % (
+                int(cfg["mpc_horizon_steps"]),
+                float(cfg["mpc_grid_step_pct"]),
+                float(cfg["mpc_du_max_pct"]),
+                float(cfg["mpc_lambda_move"]),
+            )
+        )
+        if str(telemetry_mode).upper() == "MPC":
+            lines.append("MPC telemetry fields: YH=one-step estimate, YP=horizon-end prediction")
+    return lines
+
+
+def _apply_tuned_parallel_gains(profile_mod, kp: float, ki: float, kd: float) -> None:
+    from control import pid_forms_from_gains, series_configured_from_ideal
+
+    profile_mod.KP = float(kp)
+    profile_mod.KI = float(ki)
+    profile_mod.KD = float(kd)
+    ideal_auto = pid_forms_from_gains(kp, ki, kd, float(profile_mod.SPAN))["IDEAL"]
+    algorithm = str(profile_mod.PID_ALGORITHM).upper()
+    if algorithm == "SERIES":
+        series_cfg = series_configured_from_ideal(
+            ideal_auto["KC"], ideal_auto["TI_S"], ideal_auto["TD_S"]
+        )
+        profile_mod.KC = float(series_cfg["KC"])
+        profile_mod.TI_S = float(series_cfg["TI_S"])
+        profile_mod.TD_S = float(series_cfg["TD_S"])
+        return
+    profile_mod.KC = float(ideal_auto["KC"])
+    profile_mod.TI_S = 0.0 if ideal_auto["TI_S"] is None else float(ideal_auto["TI_S"])
+    profile_mod.TD_S = 0.0 if ideal_auto["TD_S"] is None else float(ideal_auto["TD_S"])
+
+
+def _validate_run_action(action: str, profile_mod) -> None:
+    if action == "tune" and str(profile_mod.CONTROL_MODE).upper() != "PID":
+        raise ValueError("tune command requires CONTROL_MODE='PID'")
+    profile_mod.validate()
+
+
+def _snapshot_monitor_config():
+    return {
+        "control_mode": str(P.CONTROL_MODE).upper(),
+        "telemetry_mode": _telemetry_mode(P),
+        "ts_s": max(0.05, float(P.TS_S)),
+        "setpoint_c": float(P.SETPOINT_C),
+        "is_ramp": (str(P.SETPOINT_TYPE).upper() == "RAMP"),
+        "ramp_rate": float(P.SETPOINT_RAMP_RATE),
+    }
+
+
+def _snapshot_model_config():
+    return {"cutoff_c": float(P.TEMP_CUTOFF_C)}
+
+
+def _snapshot_relay_tuning_config():
+    ts_s = float(P.TS_S)
+    return {
+        "telemetry_mode": _telemetry_mode(P),
+        "ts_s": ts_s,
+        "cutoff_c": float(P.TEMP_CUTOFF_C),
+        "target_c": float(P.TUNING_TARGET_C),
+    }
+
+
+def _snapshot_control_config(exp_run_s):
+    ts_s = float(P.TS_S)
+    setpoint_type = str(P.SETPOINT_TYPE).upper()
+    return {
+        "control_mode": str(P.CONTROL_MODE).upper(),
+        "telemetry_mode": _telemetry_mode(P),
+        "control_period_ms": int(ts_s * 1000),
+        "ui_period_ms": 50,
+        "gc_period_ms": 3000,
+        "ui_log_guard_ms": 40,
+        "ts_s": ts_s,
+        "dt_max_s": 5.0 * ts_s,
+        "target_c": float(P.SETPOINT_C),
+        "setpoint_type": setpoint_type,
+        "is_ramp": (setpoint_type == "RAMP"),
+        "ramp_rate": float(P.SETPOINT_RAMP_RATE),
+        "cutoff_c": float(P.TEMP_CUTOFF_C),
+        "dist_enable": bool(P.DIST_ENABLE),
+        "dist_mode": str(P.DIST_MODE).upper(),
+        "dist_mag_pct": float(P.DIST_MAG_PCT),
+        "dist_start_s": float(P.DIST_START_S),
+        "dist_duration_s": float(P.DIST_DURATION_S),
+        "exp_run_s": exp_run_s,
+        "exp_timer_enabled": (exp_run_s is not None) and (float(exp_run_s) > 0.0),
+    }
+
+
+def _run_monitor_loop(sensor, heater, indicator, cfg):
     """Passive telemetry monitor (no control action, heater forced OFF)."""
-    ts_s = max(0.05, float(P.TS_S))
+    ts_s = float(cfg["ts_s"])
     ctrl_period_ms = int(ts_s * 1000)
     ui_period_ms = 50
     gc_period_ms = 3000
-    setpoint_c = float(P.SETPOINT_C)
-    is_ramp = (str(P.SETPOINT_TYPE).upper() == "RAMP")
-    ramp_rate = float(P.SETPOINT_RAMP_RATE)
+    setpoint_c = float(cfg["setpoint_c"])
+    is_ramp = bool(cfg["is_ramp"])
+    ramp_rate = float(cfg["ramp_rate"])
+    control_mode = str(cfg["control_mode"]).upper()
+    telemetry_mode = str(cfg["telemetry_mode"]).upper()
 
     sensor_read = sensor.read_c
     heater_off = heater.off
@@ -324,10 +420,6 @@ def _run_monitor_loop(sensor, heater, indicator):
     next_ui_ms = now_ms
     next_gc_ms = now_ms
     last_temp_c = sensor_read()
-    if not _isfinite(last_temp_c):
-        print("# ERROR: sensor reading invalid at monitor start -> monitor aborted (heater OFF)")
-        _shutdown_outputs(heater, indicator)
-        return
     sp_current = setpoint_c if not is_ramp else float(last_temp_c)
     last_ctrl_exec_ms = now_ms
 
@@ -339,7 +431,7 @@ def _run_monitor_loop(sensor, heater, indicator):
             now_ms = time.ticks_ms()
             if time.ticks_diff(now_ms, next_gc_ms) >= 0:
                 gc.collect()
-                next_gc_ms = _advance_deadline(next_gc_ms, gc_period_ms, now_ms)
+                next_gc_ms = advance_deadline(next_gc_ms, gc_period_ms, now_ms)
 
             if time.ticks_diff(now_ms, next_ui_ms) >= 0:
                 cmd = poll_command_nonblocking()
@@ -350,22 +442,17 @@ def _run_monitor_loop(sensor, heater, indicator):
                     if cmd in ("help", "?"):
                         print("# INFO: monitor commands: stop, help")
                 indicator_update(last_temp_c, sp_current)
-                next_ui_ms = _advance_deadline(next_ui_ms, ui_period_ms, now_ms)
+                next_ui_ms = advance_deadline(next_ui_ms, ui_period_ms, now_ms)
 
             if time.ticks_diff(now_ms, next_ctrl_ms) >= 0:
                 dt_s = _compute_dt_s(now_ms, last_ctrl_exec_ms, ts_s)
                 last_ctrl_exec_ms = now_ms
                 sp_current = _update_setpoint(setpoint_c, sp_current, is_ramp, ramp_rate, dt_s)
-
                 temp_c = sensor_read()
-                if _isfinite(temp_c):
-                    last_temp_c = temp_c
-                else:
-                    temp_c = last_temp_c
-                    print("# WARNING: sensor reading invalid in monitor loop (using last valid PV)")
+                last_temp_c = temp_c
                 heater_off()
-                _emit_telemetry_line(temp_c, sp_current, 0.0)
-                next_ctrl_ms = _advance_deadline(next_ctrl_ms, ctrl_period_ms, now_ms)
+                _emit_telemetry_line(temp_c, sp_current, 0.0, telemetry_mode, control_mode)
+                next_ctrl_ms = advance_deadline(next_ctrl_ms, ctrl_period_ms, now_ms)
 
             _yield_until_next(next_ui_ms, next_ctrl_ms, now_ms)
     except KeyboardInterrupt:
@@ -373,117 +460,120 @@ def _run_monitor_loop(sensor, heater, indicator):
     _shutdown_outputs(heater, indicator)
 
 
-def _run_fopdt_experiment(sensor, heater, indicator):
-    abort_cb = _make_run_abort_cb("FOPDT run")
-    overtemp_cb = _make_overtemp_cb(P.TEMP_CUTOFF_C)
-    setattr(P, "_RUN_OVERTEMP_CB", overtemp_cb)
-    model = run_model_test(sensor, heater, indicator, P, poll_cmd=abort_cb)
-    gc.collect()
-    try:
-        delattr(P, "_RUN_OVERTEMP_CB")
-    except Exception:
-        pass
-    if model is not None:
-        if set_model_values(P, model) is None:
-            print("# WARNING: FOPDT model update failed")
-    _shutdown_outputs(heater, indicator, done=True)
+def _run_fopdt_experiment(sensor, heater, indicator, cfg, run_state):
+    from identify import run_test as run_model_test, set_model_values
 
-
-def _run_pid_relay_tuning(sensor, heater, indicator):
-    ts_s = float(P.TS_S)
-    emit_period_ms = int(max(100, round(max(0.1, ts_s) * 1000.0)))
-    try:
-        P._RUN_ABORTED = False
-    except Exception:
-        pass
-    last_emit_ms = time.ticks_add(time.ticks_ms(), -emit_period_ms)
+    abort_cb = _make_run_abort_cb("FOPDT run", run_state)
+    overtemp_cb = _make_overtemp_cb(cfg["cutoff_c"])
+    telemetry_mode = _telemetry_mode(P)
 
     def _telemetry_cb(pv_c, sp_c, op_pct):
-        nonlocal last_emit_ms
-        last_emit_ms = _emit_telemetry_line_timed(pv_c, sp_c, op_pct, last_emit_ms, emit_period_ms)
+        _emit_telemetry_line(pv_c, sp_c, op_pct, telemetry_mode, "MODEL")
 
-    abort_cb = _make_run_abort_cb("TUNING")
-    overtemp_cb = _make_overtemp_cb(P.TEMP_CUTOFF_C)
-    setattr(P, "_RUN_OVERTEMP_CB", overtemp_cb)
-    print("# PHASE: TUNING run starting")
-    KP, KI, KD, _safety = run_relay_tuning(
+    success = False
+    model = run_model_test(
         sensor,
         heater,
         indicator,
         P,
-        float(P.TUNING_TARGET_C),
         poll_cmd=abort_cb,
+        overtemp_cb=overtemp_cb,
         telemetry_cb=_telemetry_cb,
     )
-    try:
-        delattr(P, "_RUN_OVERTEMP_CB")
-    except Exception:
-        pass
-    if hasattr(P, "_RUN_ABORTED") and bool(P._RUN_ABORTED):
-        _shutdown_outputs(heater, indicator, done=True)
-        return
+    gc.collect()
+    if model is not None:
+        if set_model_values(P, model) is None:
+            print("# WARNING: FOPDT model update failed")
+        else:
+            success = True
+    _shutdown_outputs(heater, indicator, done=success)
+    return success
 
-    P.KP = float(KP)
-    P.KI = float(KI)
-    P.KD = float(KD)
-    ideal_auto = pid_forms_from_gains(KP, KI, KD, float(P.SPAN))["IDEAL"]
-    P.KC = float(ideal_auto["KC"])
-    P.TI_S = 0.0 if ideal_auto["TI_S"] is None else float(ideal_auto["TI_S"])
-    P.TD_S = 0.0 if ideal_auto["TD_S"] is None else float(ideal_auto["TD_S"])
 
-    _shutdown_outputs(heater, indicator, done=True)
+def _run_pid_relay_tuning(sensor, heater, indicator, cfg, run_state):
+    from identify import run_relay_tuning
+
+    telemetry_mode = str(cfg["telemetry_mode"]).upper()
+
+    def _telemetry_cb(pv_c, sp_c, op_pct):
+        _emit_telemetry_line(pv_c, sp_c, op_pct, telemetry_mode, "PID")
+
+    abort_cb = _make_run_abort_cb("TUNING", run_state)
+    overtemp_cb = _make_overtemp_cb(cfg["cutoff_c"])
+    success = False
+    print("# PHASE: TUNING run starting")
+    gains = run_relay_tuning(
+        sensor,
+        heater,
+        indicator,
+        P,
+        float(cfg["target_c"]),
+        poll_cmd=abort_cb,
+        telemetry_cb=_telemetry_cb,
+        overtemp_cb=overtemp_cb,
+    )
+    if gains is None:
+        _shutdown_outputs(heater, indicator)
+        return False
+    KP, KI, KD = gains
+    if bool(run_state.get("aborted")):
+        _shutdown_outputs(heater, indicator)
+        return False
+
+    _apply_tuned_parallel_gains(P, KP, KI, KD)
+    success = True
+    _shutdown_outputs(heater, indicator, done=success)
+    return success
 
 
 def _run_pid_model_tuning(heater, indicator):
+    from identify import load_effective_model, run_model_tuning
+
     print("# PHASE: TUNING model")
     model = load_effective_model(P)
     if model is None:
         print("# ERROR: TUNING model requires MODEL_* values")
-        _shutdown_outputs(heater, indicator, done=True)
-        return
+        _shutdown_outputs(heater, indicator)
+        return False
     try:
         KP, KI, KD = run_model_tuning(P, model)
     except Exception as ex:
         print("# ERROR: TUNING model failed: %s" % ex)
-        _shutdown_outputs(heater, indicator, done=True)
-        return
+        _shutdown_outputs(heater, indicator)
+        return False
 
-    P.KP = float(KP)
-    P.KI = float(KI)
-    P.KD = float(KD)
-    ideal_auto = pid_forms_from_gains(KP, KI, KD, float(P.SPAN))["IDEAL"]
-    P.KC = float(ideal_auto["KC"])
-    P.TI_S = 0.0 if ideal_auto["TI_S"] is None else float(ideal_auto["TI_S"])
-    P.TD_S = 0.0 if ideal_auto["TD_S"] is None else float(ideal_auto["TD_S"])
+    _apply_tuned_parallel_gains(P, KP, KI, KD)
     _shutdown_outputs(heater, indicator, done=True)
+    return True
 
 
-def _run_control_session(sensor, heater, indicator, controller, tuning_safety: bool, exp_timer_enabled: bool, exp_run_s):
-    CONTROL_PERIOD_MS = int(P.TS_S * 1000)
-    UI_PERIOD_MS = 50
-    GC_PERIOD_MS = 3000
-    UI_LOG_GUARD_MS = 40
-    TS_S = float(P.TS_S)
-    DT_MAX_S = 5.0 * TS_S
-    R_TARGET_C = float(P.SETPOINT_C)
-    setpoint_type = str(P.SETPOINT_TYPE).upper()
-    IS_RAMP = (setpoint_type == "RAMP")
-    SETPOINT_RAMP_RATE = float(P.SETPOINT_RAMP_RATE)
-    TEMP_CUTOFF_C = float(P.TEMP_CUTOFF_C)
-    COOL_THRESHOLD_C = TEMP_CUTOFF_C - float(P.SAFETY_HYST_C)
-    SAFETY_HOLD_MS = int(P.SAFETY_HOLD_S * 1000)
-    DIST_ENABLE = bool(P.DIST_ENABLE)
-    DIST_MODE = str(P.DIST_MODE).upper()
-    DIST_MAG_PCT = float(P.DIST_MAG_PCT)
-    DIST_START_S = float(P.DIST_START_S)
-    DIST_DURATION_S = float(P.DIST_DURATION_S)
+def _run_control_session(sensor, heater, indicator, controller, cfg):
+    control_period_ms = int(cfg["control_period_ms"])
+    ui_period_ms = int(cfg["ui_period_ms"])
+    gc_period_ms = int(cfg["gc_period_ms"])
+    ui_log_guard_ms = int(cfg["ui_log_guard_ms"])
+    ts_s = float(cfg["ts_s"])
+    dt_max_s = float(cfg["dt_max_s"])
+    target_c = float(cfg["target_c"])
+    is_ramp = bool(cfg["is_ramp"])
+    ramp_rate = float(cfg["ramp_rate"])
+    cutoff_c = float(cfg["cutoff_c"])
+    dist_enable = bool(cfg["dist_enable"])
+    dist_mode = str(cfg["dist_mode"]).upper()
+    dist_mag_pct = float(cfg["dist_mag_pct"])
+    dist_start_s = float(cfg["dist_start_s"])
+    dist_duration_s = float(cfg["dist_duration_s"])
+    exp_run_s = cfg["exp_run_s"]
+    exp_timer_enabled = bool(cfg["exp_timer_enabled"])
+    control_mode = str(cfg["control_mode"]).upper()
+    telemetry_mode = str(cfg["telemetry_mode"]).upper()
 
     sensor_read = sensor.read_c
     heater_off = heater.off
     heater_set_percent = heater.set_percent
     indicator_update = indicator.update
     controller_update = controller.update
-    is_mpc_mode = (str(P.CONTROL_MODE).upper() == "MPC")
+    is_mpc_mode = (control_mode == "MPC")
     controller_warm_start = getattr(controller, "warm_start", None) if is_mpc_mode else None
     controller_get_estimates = getattr(controller, "get_estimates", None) if is_mpc_mode else None
 
@@ -496,20 +586,13 @@ def _run_control_session(sensor, heater, indicator, controller, tuning_safety: b
     last_emergency_gc_ms = now_ms
 
     y_last = sensor_read()
-    sensor_fault = not _isfinite(y_last)
-    if sensor_fault:
-        print("# ERROR: sensor reading invalid at control start -> heater forced OFF")
-        y_last = 0.0
+    if y_last >= cutoff_c:
+        print("# ERROR: overtemperature at control start (PV=%.1f °C >= cutoff %.1f °C) -> run aborted"
+              % (float(y_last), cutoff_c))
+        _shutdown_outputs(heater, indicator)
+        return False, False
 
-    r_current = float(P.SETPOINT_C) if setpoint_type == "STEP" else y_last
-
-    in_safety = bool(tuning_safety or sensor_fault)
-    safety_until_ms = 0
-    last_safety_msg_ms = 0
-
-    if in_safety:
-        safety_until_ms = time.ticks_add(time.ticks_ms(), SAFETY_HOLD_MS)
-        print("# PHASE: safety hold active at startup")
+    r_current = target_c if cfg["setpoint_type"] == "STEP" else y_last
 
     heater_off()
     if callable(controller_warm_start):
@@ -534,15 +617,12 @@ def _run_control_session(sensor, heater, indicator, controller, tuning_safety: b
         u = 0.0
         dist_prev_active = False
         dist_msg = 0  # 0=none, 1=start, 2=end
-        safety_msg_due = False
-        safety_msg_sensor = False
-        safety_msg_temp = 0.0
 
         while True:
             now_ms = time.ticks_ms()
             if time.ticks_diff(now_ms, next_gc_ms) >= 0:
                 gc.collect()
-                next_gc_ms = _advance_deadline(next_gc_ms, GC_PERIOD_MS, now_ms)
+                next_gc_ms = advance_deadline(next_gc_ms, gc_period_ms, now_ms)
             elif gc_low_mem_bytes is not None:
                 try:
                     if (mem_free_fn() < gc_low_mem_bytes) and (time.ticks_diff(now_ms, last_emergency_gc_ms) >= 500):
@@ -560,24 +640,17 @@ def _run_control_session(sensor, heater, indicator, controller, tuning_safety: b
                         break
                 indicator_update(y_last, r_current)
                 now_ui_ms = time.ticks_ms()
-                if time.ticks_diff(next_ctrl_ms, now_ui_ms) >= UI_LOG_GUARD_MS:
+                if time.ticks_diff(next_ctrl_ms, now_ui_ms) >= ui_log_guard_ms:
                     if dist_msg == 1:
-                        print("# INFO: disturbance active (%s, dOP=%+.1f%%)" % (DIST_MODE, DIST_MAG_PCT))
+                        print("# INFO: disturbance active (%s, dOP=%+.1f%%)" % (dist_mode, dist_mag_pct))
                         dist_msg = 0
                     elif dist_msg == 2:
                         print("# INFO: disturbance ended")
                         dist_msg = 0
-                    elif safety_msg_due:
-                        if safety_msg_sensor:
-                            print("# WARNING: safety hold active (sensor invalid; waiting for recovery)")
-                        else:
-                            print("# WARNING: safety hold active (temp=%.1f °C; waiting to cool below %.1f °C)"
-                                  % (safety_msg_temp, COOL_THRESHOLD_C))
-                        safety_msg_due = False
-                next_ui_ms = _advance_deadline(next_ui_ms, UI_PERIOD_MS, now_ms)
+                next_ui_ms = advance_deadline(next_ui_ms, ui_period_ms, now_ms)
 
             if time.ticks_diff(now_ms, next_ctrl_ms) >= 0:
-                dt_s = _compute_dt_s(now_ms, last_ctrl_exec_ms, TS_S, DT_MAX_S)
+                dt_s = _compute_dt_s(now_ms, last_ctrl_exec_ms, ts_s, dt_max_s)
                 last_ctrl_exec_ms = now_ms
 
                 if exp_timer_enabled:
@@ -592,63 +665,49 @@ def _run_control_session(sensor, heater, indicator, controller, tuning_safety: b
                         ended_by_timer = True
                         break
 
-                y_raw = sensor_read()
-                pv_valid = _isfinite(y_raw)
-                if pv_valid:
-                    y = y_raw
-                    y_last = y_raw
-                else:
-                    y = y_last
-                    if not in_safety:
-                        in_safety = True
-                        safety_until_ms = _activate_safety(now_ms, SAFETY_HOLD_MS, controller.reset, heater_off)
+                y = sensor_read()
+                y_last = y
+
+                r_current = _update_setpoint(target_c, r_current, is_ramp, ramp_rate, dt_s)
+
+                if y >= cutoff_c:
+                    try:
+                        controller.reset()
+                    except Exception:
+                        pass
                     heater_off()
+                    print("# ERROR: overtemperature cutoff reached (PV=%.1f °C >= cutoff %.1f °C) -> control run aborted"
+                          % (float(y), cutoff_c))
+                    break
 
-                r_current = _update_setpoint(R_TARGET_C, r_current, IS_RAMP, SETPOINT_RAMP_RATE, dt_s)
-
-                if (not in_safety) and (y >= TEMP_CUTOFF_C):
-                    in_safety = True
-                    safety_until_ms = _activate_safety(now_ms, SAFETY_HOLD_MS, controller.reset, heater_off)
-
-                if in_safety and _safety_can_clear(now_ms, safety_until_ms, pv_valid, y_raw, COOL_THRESHOLD_C):
-                    in_safety = False
-
-                if in_safety:
+                u_ctrl = controller_update(r_current, y, dt_s)
+                elapsed_s = time.ticks_diff(now_ms, exp_start_ms) / 1000.0
+                dist_active = _disturbance_is_active(
+                    elapsed_s, dist_enable, dist_mode, dist_start_s, dist_duration_s
+                )
+                if dist_active and (not dist_prev_active):
+                    dist_msg = 1
+                if (not dist_active) and dist_prev_active and (dist_mode == "PULSE"):
+                    dist_msg = 2
+                dist_prev_active = dist_active
+                u = u_ctrl + dist_mag_pct if dist_active else u_ctrl
+                if u < 0.0:
                     u = 0.0
-                    heater_off()
-                    # Latch safety status (max 1 line/s); print later in UI branch.
-                    if time.ticks_diff(now_ms, last_safety_msg_ms) >= 1000:
-                        last_safety_msg_ms = now_ms
-                        safety_msg_due = True
-                        safety_msg_sensor = (not pv_valid)
-                        safety_msg_temp = float(y_raw)
-                else:
-                    u_ctrl = controller_update(r_current, y, dt_s)
-                    elapsed_s = time.ticks_diff(now_ms, exp_start_ms) / 1000.0
-                    dist_active = _disturbance_is_active(
-                        elapsed_s, DIST_ENABLE, DIST_MODE, DIST_START_S, DIST_DURATION_S
-                    )
-                    if dist_active and (not dist_prev_active):
-                        dist_msg = 1
-                    if (not dist_active) and dist_prev_active and (DIST_MODE == "PULSE"):
-                        dist_msg = 2
-                    dist_prev_active = dist_active
-                    u = u_ctrl + DIST_MAG_PCT if dist_active else u_ctrl
-                    if u < 0.0:
-                        u = 0.0
-                    elif u > 100.0:
-                        u = 100.0
-                    heater_set_percent(u)
+                elif u > 100.0:
+                    u = 100.0
+                heater_set_percent(u)
 
                 if callable(controller_get_estimates):
                     try:
                         y_hat, y_pred = controller_get_estimates()
-                        _emit_telemetry_line(y, r_current, u, y_hat=y_hat, y_pred=y_pred)
+                        _emit_telemetry_line(
+                            y, r_current, u, telemetry_mode, control_mode, y_hat=y_hat, y_pred=y_pred
+                        )
                     except Exception:
-                        _emit_telemetry_line(y, r_current, u)
+                        _emit_telemetry_line(y, r_current, u, telemetry_mode, control_mode)
                 else:
-                    _emit_telemetry_line(y, r_current, u)
-                next_ctrl_ms = _advance_deadline(next_ctrl_ms, CONTROL_PERIOD_MS, now_ms)
+                    _emit_telemetry_line(y, r_current, u, telemetry_mode, control_mode)
+                next_ctrl_ms = advance_deadline(next_ctrl_ms, control_period_ms, now_ms)
 
             _yield_until_next(next_ui_ms, next_ctrl_ms, now_ms)
 
@@ -681,63 +740,81 @@ while True:
         _print_session_header()
         continue
     if action == "monitor":
-        _run_monitor_loop(sensor, heater, indicator)
+        try:
+            _run_monitor_loop(sensor, heater, indicator, _snapshot_monitor_config())
+        except Exception as ex:
+            _shutdown_outputs(heater, indicator)
+            print("# ERROR: monitor run failed: %s" % ex)
         continue
     if action == "model":
         try:
-            P.validate()
+            _validate_run_action("model", P)
         except Exception as ex:
             print("# ERROR: model validation failed: %s" % ex)
             continue
-        _run_fopdt_experiment(sensor, heater, indicator)
+        run_state = _new_run_state()
+        try:
+            _run_fopdt_experiment(sensor, heater, indicator, _snapshot_model_config(), run_state)
+        except Exception as ex:
+            _shutdown_outputs(heater, indicator)
+            print("# ERROR: model run failed: %s" % ex)
         continue
     if action == "tune":
         try:
-            if str(P.CONTROL_MODE).upper() != "PID":
-                raise ValueError("tune command requires CONTROL_MODE='PID'")
-            P.validate()
+            _validate_run_action("tune", P)
         except Exception as ex:
             print("# ERROR: tune validation failed: %s" % ex)
             continue
+        run_state = _new_run_state()
         rule = str(P.TUNING_RULE).upper()
         if rule in P.RELAY_TUNING_RULES:
-            _run_pid_relay_tuning(sensor, heater, indicator)
+            try:
+                _run_pid_relay_tuning(sensor, heater, indicator, _snapshot_relay_tuning_config(), run_state)
+            except Exception as ex:
+                _shutdown_outputs(heater, indicator)
+                print("# ERROR: tune run failed: %s" % ex)
         elif rule in P.MODEL_TUNING_RULES:
-            _run_pid_model_tuning(heater, indicator)
+            try:
+                _run_pid_model_tuning(heater, indicator)
+            except Exception as ex:
+                _shutdown_outputs(heater, indicator)
+                print("# ERROR: tune run failed: %s" % ex)
         else:
-            print("# ERROR: tune validation failed: TUNING_RULE must be one of %s"
-                  % (P.ALLOWED_TUNING_RULES,))
+            print("# ERROR: internal tune dispatch error (unexpected TUNING_RULE=%s)" % rule)
         continue
     if action != "control":
         print("# ERROR: unknown run action: %s" % str(action))
         continue
 
     try:
-        P.validate()
+        _validate_run_action("control", P)
     except Exception as ex:
         print("# ERROR: control validation failed: %s" % ex)
         continue
     # Re-read timer settings after command-phase parameter edits.
     exp_run_s = P.EXPERIMENT_RUN_S
-    exp_timer_enabled = (exp_run_s is not None) and (float(exp_run_s) > 0.0)
-
+    control_cfg = _snapshot_control_config(exp_run_s)
     try:
-        controller, tuning_safety = build_controller(P, sensor, heater, indicator, poll_cmd=poll_command_nonblocking)
+        from control import build_controller
+
+        controller = build_controller(P, emit_info=print)
     except Exception as ex:
         _shutdown_outputs(heater, indicator)
         print("# ERROR: controller build failed: %s" % ex)
-        continue
-    if hasattr(P, "_RUN_ABORTED") and bool(P._RUN_ABORTED):
-        _shutdown_outputs(heater, indicator)
         continue
     try:
         controller.reset()
     except Exception:
         pass
 
-    restart_requested, ended_by_timer = _run_control_session(
-        sensor, heater, indicator, controller, tuning_safety, exp_timer_enabled, exp_run_s
-    )
+    try:
+        restart_requested, ended_by_timer = _run_control_session(
+            sensor, heater, indicator, controller, control_cfg
+        )
+    except Exception as ex:
+        _shutdown_outputs(heater, indicator)
+        print("# ERROR: control run failed: %s" % ex)
+        continue
 
     if restart_requested:
         print("# INFO: restart complete")

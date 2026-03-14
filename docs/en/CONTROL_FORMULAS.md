@@ -45,17 +45,22 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - K. J. Astrom, T. Hagglund, *PID Controllers: Theory, Design, and Tuning*, 2nd ed.
 - Code:
-  - `firmware/controllers.py::PIDParallelPercent.update`
+  - `firmware/control.py::PIDParallelPercent.update`
 
 ### Series/Ideal conversion
 - Equation:
   - `Kc_eff = Kc*(1 + Td/Ti)`
   - `Ti_eff = Ti + Td`
   - `Td_eff = (Ti*Td)/(Ti + Td)`
+- Exact inverse used when tuned effective gains must be stored back as SERIES-configured values:
+  - `Ti = (Ti_eff + sqrt(Ti_eff^2 - 4*Ti_eff*Td_eff))/2`
+  - `Td = Ti_eff - Ti`
+  - `Kc = Kc_eff*(Ti/Ti_eff)`
 - Source:
   - K. J. Astrom, T. Hagglund, *PID Controllers*
 - Code:
-  - `firmware/builder.py::_series_to_ideal_equivalent`
+  - `firmware/control.py::_series_to_ideal_equivalent`
+  - `firmware/control.py::series_configured_from_ideal`
 
 ### 2DOF PID
 - Equation:
@@ -65,7 +70,7 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - K. J. Astrom, T. Hagglund, *Advanced PID Control*
 - Code:
-  - `firmware/controllers.py::PID2DOFPercent.update`
+  - `firmware/control.py::PID2DOFPercent.update`
 
 ## Relay Tuning
 
@@ -79,7 +84,7 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - Astrom, Hagglund (1984), DOI: `10.1016/0005-1098(84)90014-1`
 - Code:
-  - `firmware/tuning.py::run_relay_tuning`
+  - `firmware/identify.py::run_relay_tuning`
 
 ### Ziegler-Nichols PID (ultimate-cycle form)
 - Equation:
@@ -88,7 +93,7 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - Ziegler, Nichols (1942), DOI: `10.1115/1.2899060`
 - Code:
-  - `firmware/tuning.py::run_relay_tuning`
+  - `firmware/identify.py::run_relay_tuning`
 
 ### Tyreus-Luyben PID
 - Equation:
@@ -97,7 +102,7 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - Tyreus, Luyben (1992), *ISA Transactions*
 - Code:
-  - `firmware/tuning.py::run_relay_tuning`
+  - `firmware/identify.py::run_relay_tuning`
 
 ### Relay-rule P/PI/PID selection
 - Equation:
@@ -107,22 +112,22 @@ For each formula: equation, symbols/units, source, and code location.
 - Source:
   - Standard controller-order reduction from base tuning family
 - Code:
-  - `firmware/tuning.py::_rule_terms`
-  - `firmware/tuning.py::run_relay_tuning`
+  - `firmware/identify.py::_rule_terms`
+  - `firmware/identify.py::run_relay_tuning`
 
 ## Model Tuning (FOPDT)
 
 ### Ziegler-Nichols 1 (reaction-curve, open-loop)
 - Equation:
-  - `ZN_1_P:   Kc = tau/(K*theta)`
-  - `ZN_1_PI:  Kc = 0.9*tau/(K*theta),  Ti = 3.33*theta`
-  - `ZN_1_PID: Kc = 1.2*tau/(K*theta),  Ti = 2*theta,  Td = 0.5*theta`
+  - `ZN1_P:   Kc = tau/(K*theta)`
+  - `ZN1_PI:  Kc = 0.9*tau/(K*theta),  Ti = 3.33*theta`
+  - `ZN1_PID: Kc = 1.2*tau/(K*theta),  Ti = 2*theta,  Td = 0.5*theta`
   - Parallel mapping: `Kp=Kc`, `Ki=Kc/Ti`, `Kd=Kc*Td`
 - Source:
   - J. G. Ziegler, N. B. Nichols (1942), DOI: `10.1115/1.2899060`
 - Code:
-  - `firmware/tuning.py::_model_rule_set`
-  - `firmware/tuning.py::run_model_tuning`
+  - `firmware/identify.py::_model_rule_set`
+  - `firmware/identify.py::run_model_tuning`
 
 ### Cohen-Coon reaction-curve tuning from FOPDT
 - Equation:
@@ -143,8 +148,8 @@ For each formula: equation, symbols/units, source, and code location.
   - G. H. Cohen, G. A. Coon, *Theoretical Consideration of Retarded Control*, Transactions of the ASME, 1953.
   - D. E. Seborg, T. F. Edgar, D. A. Mellichamp, F. J. Doyle III, *Process Dynamics and Control*, 3rd ed. (reaction-curve tuning table).
 - Code:
-  - `firmware/tuning.py::_model_rule_set`
-  - `firmware/tuning.py::run_model_tuning`
+  - `firmware/identify.py::_model_rule_set`
+  - `firmware/identify.py::run_model_tuning`
 
 ## FOPDT Identification
 
@@ -159,21 +164,21 @@ For each formula: equation, symbols/units, source, and code location.
   - No fixed min/max steady-time gates are used inside model identification.
   - Stop/abort/overtemperature callbacks remain the termination guards.
 - Code:
-  - `firmware/model.py::_wait_for_steady`
-  - `firmware/model.py::run_test`
+  - `firmware/identify.py::_wait_for_steady`
+  - `firmware/identify.py::run_test`
 
 ### Process gain
 - Equation:
   - `K = (y_final - y_initial)/(u1 - u0)`
 - Code:
-  - `firmware/model.py::run_test`
+  - `firmware/identify.py::run_test`
 
 ### FOPDT response model used for RMSE
 - Equation:
   - `y_hat(t) = y0` for `t < theta`
   - `y_hat(t) = y0 + K*(u1-u0)*(1 - exp(-(t-theta)/tau))` for `t >= theta`
 - Code:
-  - `firmware/model.py::_simulate_fopdt_step`, `firmware/model.py::run_test`
+  - `firmware/identify.py::_simulate_fopdt_step`, `firmware/identify.py::run_test`
 
 ## ON/OFF Controller
 
@@ -183,4 +188,4 @@ For each formula: equation, symbols/units, source, and code location.
   - OFF if `PV >= SP + hyst`
   - otherwise hold previous state
 - Code:
-  - `firmware/controllers.py::TwoPositionPercent.update`
+  - `firmware/control.py::TwoPositionPercent.update`

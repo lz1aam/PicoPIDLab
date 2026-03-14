@@ -1,6 +1,6 @@
 # Démarrage rapide
 
-Version cible: **v1.2.6**
+Version cible: **v1.2.8**
 
 Workflows:
 - Thonny (terminal firmware direct)
@@ -26,7 +26,7 @@ Copier `firmware/*` sur la carte.
 python3 runner/lab.py
 ```
 
-Commandes hôte: `h`, `c`, `r <id>`, `s`, `k`, `u`, `x`, `b`, `q`.
+Commandes hôte: `h`, `c`, `e <id>`, `s`, `k`, `u`, `x`, `b`, `q`.
 
 Sorties run:
 - `runner/runs/<timestamp>__<EXPERIMENT>__<shortname>/`

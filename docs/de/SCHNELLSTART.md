@@ -1,6 +1,6 @@
 # Schnellstart
 
-Zielversion: **v1.2.6**
+Zielversion: **v1.2.8**
 
 Dieses Dokument deckt beide unterstützten Workflows ab:
 - **Thonny-Workflow** (direktes Firmware-Terminal)
@@ -41,7 +41,7 @@ Typische Befehle:
 
 1. `check`
 2. `status`
-3. `params`, `params pid`, `params model`, `params tuning`
+3. `params`, `params pid`, `params model`, `params tune`
 4. `control` / `tune` / `model` / `monitor`
 5. während Lauf: `stop`
 
@@ -69,7 +69,7 @@ python3 runner/lab.py
 
 - `h` Hilfe
 - `c` Katalog
-- `r <id|exp_id>` Rezept starten
+- `e <id|exp_id>` Experiment starten
 - `s` laufenden Versuch stoppen
 - `k` Firmware-`check`
 - `u` Host-Status
@@ -86,7 +86,7 @@ Nicht-Host-Eingaben werden an Firmware weitergeleitet.
 ## 5. Rezeptsystem (`runner/lab.yaml`)
 
 - Quelle der Übungsrezepte: `runner/lab.yaml`
-- Fallback-Parameter: `firmware/profile.py`
+- Fallback-Parameter: `firmware/config.py`
 
 Arten:
 - `standard`
@@ -109,11 +109,9 @@ Synchronisationsmarker:
 Vor jedem Versuch:
 
 1. `check`
-2. Bestätigung: `# RESULT: check passed (profile is valid)`
+2. Bestätigung: `# RESULT: check passed (config is valid)`
 3. Sicherheitsparameter prüfen:
    - `TEMP_CUTOFF_C`
-   - `SAFETY_HOLD_S`
-   - `SAFETY_HYST_C`
 
 ## 8. Fehlersuche
 
@@ -138,4 +136,4 @@ Vor jedem Versuch:
 - `docs/en/SETTINGS_DEPENDENCIES.md`
 - `docs/en/REPORTING_STYLE.md`
 - `docs/en/CONTROL_FORMULAS.md`
-- `docs/en/PROFILE_TUTORIAL.md`
+- `docs/en/CONFIG_TUTORIAL.md`

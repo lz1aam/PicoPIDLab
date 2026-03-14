@@ -12,11 +12,9 @@
 ## Глобална проверка за безопасност
 
 1. Изпълнете `check`.
-2. Потвърдете, че изходът съдържа `# RESULT: check passed (profile is valid)`.
+2. Потвърдете, че изходът съдържа `# RESULT: check passed (config is valid)`.
 3. Задайте:
    - `TEMP_CUTOFF_C 80`
-   - `SAFETY_HOLD_S 5`
-   - `SAFETY_HYST_C 2`
 4. Изпълнете `check` отново.
 
 ## Dry-run на FOPDT път
@@ -35,7 +33,7 @@
 
 1. Конфигурирайте:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN_2_PID`
+   - `TUNING_RULE ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

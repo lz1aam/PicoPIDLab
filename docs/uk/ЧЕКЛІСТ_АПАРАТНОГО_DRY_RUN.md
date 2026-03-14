@@ -10,11 +10,9 @@
 ## Перевірка безпеки
 
 1. Виконати `check`.
-2. Переконатися, що є `# RESULT: check passed (profile is valid)`.
+2. Переконатися, що є `# RESULT: check passed (config is valid)`.
 3. Встановити:
    - `TEMP_CUTOFF_C 80`
-   - `SAFETY_HOLD_S 5`
-   - `SAFETY_HYST_C 2`
 4. Повторно виконати `check`.
 
 ## Dry-run FOPDT
@@ -25,7 +23,7 @@
 
 ## Dry-run TUNING (relay)
 
-1. Налаштувати: `TUNING_RULE ZN_2_PID`, `PID_VARIANT PID`, `PID_AW_TYPE CLAMP`, `PID_ALGORITHM PARALLEL`, `TUNING_TARGET_C 50`, `TUNING_BAND_C 1`, `TUNING_CYCLES 5`, `EXPERIMENT_RUN_S 480`.
+1. Налаштувати: `TUNING_RULE ZN2_PID`, `PID_VARIANT PID`, `PID_AW_TYPE CLAMP`, `PID_ALGORITHM PARALLEL`, `TUNING_TARGET_C 50`, `TUNING_BAND_C 1`, `TUNING_CYCLES 5`, `EXPERIMENT_RUN_S 480`.
 2. `check`
 3. `tune`
 

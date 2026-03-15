@@ -23,7 +23,7 @@ For each formula: equation, symbols/units, source, and code location.
 
 ### Additive OP disturbance (control runs only)
 - Equation:
-  - `u_applied = clamp(u_ctrl + d_u(t), 0, 100)`
+  - `u_applied = clamp(u + d_u(t), 0, 100)`
   - `d_u(t) = DIST_MAG_PCT` for active disturbance interval, else `0`
   - STEP mode active interval: `t >= DIST_START_S`
   - PULSE mode active interval: `DIST_START_S <= t < DIST_START_S + DIST_DURATION_S`
@@ -41,7 +41,7 @@ For each formula: equation, symbols/units, source, and code location.
   - `u = clamp(P + I + D)`
   - `P = Kp*e`
   - `I[k] = I[k-1] + Ki*e*dt` (with AW policy)
-  - `D = LPF(-Kd*d(PV)/dt)`
+  - `D = LPF(-Kd*dy/dt)`
 - Source:
   - K. J. Astrom, T. Hagglund, *PID Controllers: Theory, Design, and Tuning*, 2nd ed.
 - Code:
@@ -64,9 +64,9 @@ For each formula: equation, symbols/units, source, and code location.
 
 ### 2DOF PID
 - Equation:
-  - `e_p = beta*SP - PV`
-  - `e_i = SP - PV`
-  - `P = Kp*e_p`, `I += Ki*e_i*dt`, `D = -Kd*d(PV)/dt`
+  - `e_p = beta*r - y`
+  - `e_i = r - y`
+  - `P = Kp*e_p`, `I += Ki*e_i*dt`, `D = -Kd*dy/dt`
 - Source:
   - K. J. Astrom, T. Hagglund, *Advanced PID Control*
 - Code:
@@ -76,15 +76,15 @@ For each formula: equation, symbols/units, source, and code location.
 - Equation:
   - Total output: `u = clamp(u_ff + u_fb)`
   - Feedback path:
-    - `e = SP - PV`
+    - `e = r - y`
     - `P = Kp*e`
     - `I[k] = I[k-1] + Ki*e*dt` (conditional integration against total saturation)
-    - `D = LPF(-Kd*d(PV)/dt)`
+    - `D = LPF(-Kd*dy/dt)`
     - `u_fb = P + I + D`
   - Feedforward path, manual mode:
-    - `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(SP - ambient)`
+    - `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(r - ambient)`
   - Feedforward path, FOPDT-gain mode:
-    - `u_ff = u0 + (SP - ambient)/K`
+    - `u_ff = u0 + (r - ambient)/K`
 - Source:
   - D. E. Seborg, T. F. Edgar, D. A. Mellichamp, F. J. Doyle III, *Process Dynamics and Control*, 3rd ed. (feedforward compensation structure).
   - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID feedback path conventions).
@@ -96,8 +96,8 @@ For each formula: equation, symbols/units, source, and code location.
 - Equation:
   - Schedule breakpoints: `(sched_var, Kp, Ki, Kd)`
   - Scheduling variable:
-    - `sched_var = PV` if `GS_VARIABLE='PV'`
-    - `sched_var = SP` if `GS_VARIABLE='SP'`
+    - `sched_var = y` if `GS_VARIABLE='PV'`
+    - `sched_var = r` if `GS_VARIABLE='SP'`
   - Linear interpolation between neighboring breakpoints:
     - `a = (sched_var - x0)/(x1 - x0)`
     - `Kp = Kp0 + a*(Kp1 - Kp0)`
@@ -106,7 +106,7 @@ For each formula: equation, symbols/units, source, and code location.
   - Integral rescaling when `Ki` changes:
     - `I <- I*(Ki_new/Ki_old)` for `Ki_old > 0`, `Ki_new > 0`
   - Control law then follows standard parallel PID:
-    - `u = clamp(Kp*e + I + LPF(-Kd*d(PV)/dt))`
+    - `u = clamp(Kp*e + I + LPF(-Kd*dy/dt))`
 - Source:
   - J. S. Shamma, M. Athans, "Gain Scheduling: Potential Hazards and Possible Remedies," *IEEE Control Systems Magazine*, 1992.
   - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID base law).
@@ -119,7 +119,7 @@ For each formula: equation, symbols/units, source, and code location.
 ### Ultimate gain from relay test
 - Equation:
   - Relay outputs are fixed two-position ON/OFF: `u_high=100%`, `u_low=0%`
-  - `A = PV_pp/2`
+  - `A = y_pp/2`
   - `d_eff = (u_high - u_low)/2`
   - `Ku = 4*d_eff/(pi*A)`
   - `Pu = mean(oscillation period)`
@@ -198,10 +198,10 @@ For each formula: equation, symbols/units, source, and code location.
 ### Steady-state detector (baseline and step-end)
 - Equation:
   - Steady window condition: `span(window) >= STEADY_WINDOW_S`
-  - Band condition: `PV_p2p(window) <= 2*STEADY_BAND_C`
+  - Band condition: `y_p2p(window) <= 2*STEADY_BAND_C`
   - Baseline steady: steady window condition AND band condition
   - Step-end steady: baseline conditions plus movement guard
-    `|PV_avg_step - y0| >= 2*STEADY_BAND_C`
+    `|y_avg_step - y0| >= 2*STEADY_BAND_C`
 - Notes:
   - No fixed min/max steady-time gates are used inside model identification.
   - Stop/abort/overtemperature callbacks remain the termination guards.
@@ -226,8 +226,8 @@ For each formula: equation, symbols/units, source, and code location.
 
 ### Hysteresis two-position rule
 - Equation:
-  - ON if `PV <= SP - hyst`
-  - OFF if `PV >= SP + hyst`
+  - ON if `y <= r - hyst`
+  - OFF if `y >= r + hyst`
   - otherwise hold previous state
 - Code:
   - `firmware/control.py::TwoPositionPercent.update`
@@ -237,7 +237,7 @@ For each formula: equation, symbols/units, source, and code location.
 ### Sugeno incremental fuzzy controller
 - Equation:
   - Inputs:
-    - `e = SP - PV`
+    - `e = r - y`
     - `de = d(e)/dt`
   - Normalization:
     - `e_n = clamp(e/FUZZY_E_SCALE_C, -1, 1)`
@@ -269,7 +269,7 @@ For each formula: equation, symbols/units, source, and code location.
     - second move `u1`
     - hold `u1` over the remaining horizon
   - Cost:
-    - `J = sum_i (SP - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
+    - `J = sum_i (r - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
 - Source:
   - E. F. Camacho, C. Bordons, *Model Predictive Control*, 2nd ed.
   - This firmware uses a deliberately simplified educational two-move blocking approximation for RP2040 practicality.
@@ -285,9 +285,9 @@ For each formula: equation, symbols/units, source, and code location.
     - delayed model output `y_model_delay`
     - delay-free model output `y_model_nodelay`
   - Corrected predictor output:
-    - `y_pred = y_model_nodelay + (PV - y_model_delay)`
+    - `y_pred = y_model_nodelay + (y - y_model_delay)`
   - PI control is applied to the predicted output:
-    - `e = SP - y_pred`
+    - `e = r - y_pred`
     - `u = clamp(Kp*e + I)`
     - `I[k] = I[k-1] + Ki*e*dt` (conditional integration)
 - Source:

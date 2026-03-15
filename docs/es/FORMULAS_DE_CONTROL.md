@@ -12,7 +12,7 @@ Registro canónico de fórmulas de teoría de control usadas en el código.
 
 ## Perturbación en la salida de control
 
-- `u_applied = clamp(u_ctrl + d_u(t), 0, 100)`
+- `u_applied = clamp(u + d_u(t), 0, 100)`
 - `d_u(t)=DIST_MAG_PCT` en intervalo activo, si no `0`
 - STEP: `t >= DIST_START_S`
 - PULSE: `DIST_START_S <= t < DIST_START_S + DIST_DURATION_S`
@@ -28,7 +28,7 @@ Código:
 - `u = clamp(P + I + D)`
 - `P = Kp*e`
 - `I[k] = I[k-1] + Ki*e*dt`
-- `D = LPF(-Kd*d(PV)/dt)`
+- `D = LPF(-Kd*dy/dt)`
 
 Código:
 - `firmware/control.py::PIDParallelPercent.update`
@@ -44,9 +44,9 @@ Código:
 
 ### PID 2DOF
 
-- `e_p = beta*SP - PV`
-- `e_i = SP - PV`
-- `P=Kp*e_p`, `I += Ki*e_i*dt`, `D=-Kd*d(PV)/dt`
+- `e_p = beta*r - y`
+- `e_i = r - y`
+- `P=Kp*e_p`, `I += Ki*e_i*dt`, `D=-Kd*dy/dt`
 
 Código:
 - `firmware/control.py::PID2DOFPercent.update`
@@ -54,9 +54,9 @@ Código:
 ### PID con feedforward (`FF_PID`)
 
 - `u = clamp(u_ff + u_fb)`
-- `u_fb = Kp*e + I + LPF(-Kd*d(PV)/dt)`
-- MANUAL: `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(SP - ambient)`
-- FOPDT_GAIN: `u_ff = u0 + (SP - ambient)/K`
+- `u_fb = Kp*e + I + LPF(-Kd*dy/dt)`
+- MANUAL: `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(r - ambient)`
+- FOPDT_GAIN: `u_ff = u0 + (r - ambient)/K`
 
 Código:
 - `firmware/control.py::PIDFeedForwardPercent._feedforward`
@@ -65,7 +65,7 @@ Código:
 ### PID con scheduling de ganancias (`GAIN_SCHED`)
 
 - Tabla: `(sched_var, Kp, Ki, Kd)`
-- `sched_var = PV` o `SP`
+- `sched_var = y` o `r`
 - Interpolación lineal entre puntos vecinos:
   - `Kp = Kp0 + a*(Kp1-Kp0)`
   - `Ki = Ki0 + a*(Ki1-Ki0)`
@@ -80,7 +80,7 @@ Código:
 
 ### Ganancia última
 
-- `A = PV_pp/2`
+- `A = y_pp/2`
 - `d_eff = (u_high - u_low)/2`
 - `Ku = 4*d_eff/(pi*A)`
 - `Pu = mean(periodo)`
@@ -124,7 +124,7 @@ Código:
 ### Estado estacionario
 
 - Ventana: `span(window) >= STEADY_WINDOW_S`
-- Banda: `PV_p2p(window) <= 2*STEADY_BAND_C`
+- Banda: `y_p2p(window) <= 2*STEADY_BAND_C`
 - Fin de escalón con condición adicional de desplazamiento
 
 Código:
@@ -146,8 +146,8 @@ Código:
 
 ## Control ON/OFF
 
-- ON si `PV <= SP - hyst`
-- OFF si `PV >= SP + hyst`
+- ON si `y <= r - hyst`
+- OFF si `y >= r + hyst`
 - en caso contrario mantiene estado
 
 Código:
@@ -157,7 +157,7 @@ Código:
 
 ### Controlador difuso incremental de Sugeno
 
-- `e = SP - PV`
+- `e = r - y`
 - `de = d(e)/dt`
 - Normalización:
   - `e_n = clamp(e/FUZZY_E_SCALE_C, -1, 1)`
@@ -179,7 +179,7 @@ Código:
 - `x[k+1] = alpha*x[k] + beta*K*(u_del[k] - u0)`
 - `y_hat[k] = y0 + x[k]`
 - Coste:
-  - `J = sum_i (SP - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
+  - `J = sum_i (r - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
 - Usa bloqueo de dos movimientos: `u0`, `u1`, y luego mantiene `u1`
 
 Código:
@@ -189,8 +189,8 @@ Código:
 ### Smith Predictor PI (`SMITH_PI`)
 
 - `G(s) = K/(tau*s + 1) * exp(-theta*s)`
-- `y_pred = y_model_nodelay + (PV - y_model_delay)`
-- `e = SP - y_pred`
+- `y_pred = y_model_nodelay + (y - y_model_delay)`
+- `e = r - y_pred`
 - `u = clamp(Kp*e + I)`
 
 Código:

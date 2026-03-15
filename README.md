@@ -48,13 +48,13 @@ Relay cycling around the target temperature for extracting oscillation metrics a
 
 ![PID feedforward tracking plot](hardware/examples/pid-feedforward-tracking.png)
 
-Closed-loop tracking with feedforward support, showing `PV` convergence to `SP` and the corresponding heater effort.
+Closed-loop tracking with feedforward support and a disturbance event, showing `PV` recovery to `SP` and the corresponding heater effort.
 
 ### MPC tracking
 
 ![MPC tracking plot](hardware/examples/mpc-tracking.png)
 
-Predictive control example with `YH` and `YP`, showing model-based tracking and constrained output moves.
+Predictive control example with `YH` and `YP`, including a disturbance event to show model-based recovery and constrained output moves.
 
 Students primarily edit one file:
 - `firmware/config.py`
@@ -128,8 +128,8 @@ For PID family:
 - `PID_VARIANT`: `PID`, `2DOF`, `FF_PID`, `GAIN_SCHED`, `SMITH_PI`
 - `PID_ALGORITHM`: `PARALLEL`, `IDEAL`, `SERIES`
 - `TUNING_METHOD`:
-  - model-based: `ZN1_*`, `CC_*`
-  - relay-based: `ZN2_*`, `TL_*`
+  - model-based: `ZN1_P`, `ZN1_PI`, `ZN1_PID`, `CC_P`, `CC_PI`, `CC_PID`
+  - relay-based: `ZN2_P`, `ZN2_PI`, `ZN2_PID`, `TL_P`, `TL_PI`, `TL_PID`
 
 ## Two Workflows
 

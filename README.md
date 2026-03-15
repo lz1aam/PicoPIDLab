@@ -5,7 +5,7 @@ Current version: **v1.2.9** (2026-03-15)
 PicoPID Lab is an open-source educational platform for university control-systems courses.  
 Students experiment with ON/OFF, PID, Fuzzy, and MPC algorithms on real hardware (RP2040-based thermal plant), then compare controller performance through telemetry, metrics, and plots.
 
-Primary runtime is **MicroPython on RP2040** (Pico class boards).
+Primary runtime is **MicroPython on RP2040** (RP2040-Zero class boards).
 
 ![PicoPID Lab hardware](hardware/PicoPIDLab-picture.jpg)
 

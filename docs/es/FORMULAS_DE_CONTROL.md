@@ -51,6 +51,31 @@ Código:
 Código:
 - `firmware/control.py::PID2DOFPercent.update`
 
+### PID con feedforward (`FF_PID`)
+
+- `u = clamp(u_ff + u_fb)`
+- `u_fb = Kp*e + I + LPF(-Kd*d(PV)/dt)`
+- MANUAL: `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(SP - ambient)`
+- FOPDT_GAIN: `u_ff = u0 + (SP - ambient)/K`
+
+Código:
+- `firmware/control.py::PIDFeedForwardPercent._feedforward`
+- `firmware/control.py::PIDFeedForwardPercent.update`
+
+### PID con scheduling de ganancias (`GAIN_SCHED`)
+
+- Tabla: `(sched_var, Kp, Ki, Kd)`
+- `sched_var = PV` o `SP`
+- Interpolación lineal entre puntos vecinos:
+  - `Kp = Kp0 + a*(Kp1-Kp0)`
+  - `Ki = Ki0 + a*(Ki1-Ki0)`
+  - `Kd = Kd0 + a*(Kd1-Kd0)`
+- Cuando cambia `Ki`: `I <- I*(Ki_new/Ki_old)`
+
+Código:
+- `firmware/control.py::GainScheduledPIDPercent._interp_gains`
+- `firmware/control.py::GainScheduledPIDPercent.update`
+
 ## Sintonía relay
 
 ### Ganancia última
@@ -127,3 +152,46 @@ Código:
 
 Código:
 - `firmware/control.py::TwoPositionPercent.update`
+
+## Control difuso
+
+### Controlador difuso incremental de Sugeno
+
+- `e = SP - PV`
+- `de = d(e)/dt`
+- Normalización:
+  - `e_n = clamp(e/FUZZY_E_SCALE_C, -1, 1)`
+  - `de_n = clamp(de/FUZZY_DE_SCALE_C_PER_S, -1, 1)`
+- Salida Sugeno singleton:
+  - `du_norm = sum(w_ij*c_ij)/sum(w_ij)`
+- Ley incremental:
+  - `u[k] = clamp(u[k-1] + FUZZY_DU_RATE_MAX*dt*du_norm)`
+
+Código:
+- `firmware/control.py::_mf5`
+- `firmware/control.py::FuzzySugenoIncrementalPercent.update`
+
+## Control basado en modelo
+
+### MPC-lite
+
+- `alpha = exp(-dt/tau)`, `beta = 1 - alpha`
+- `x[k+1] = alpha*x[k] + beta*K*(u_del[k] - u0)`
+- `y_hat[k] = y0 + x[k]`
+- Coste:
+  - `J = sum_i (SP - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
+- Usa bloqueo de dos movimientos: `u0`, `u1`, y luego mantiene `u1`
+
+Código:
+- `firmware/control.py::MPCLitePercent._simulate_cost`
+- `firmware/control.py::MPCLitePercent.update`
+
+### Smith Predictor PI (`SMITH_PI`)
+
+- `G(s) = K/(tau*s + 1) * exp(-theta*s)`
+- `y_pred = y_model_nodelay + (PV - y_model_delay)`
+- `e = SP - y_pred`
+- `u = clamp(Kp*e + I)`
+
+Código:
+- `firmware/control.py::SmithPredictorPI.update`

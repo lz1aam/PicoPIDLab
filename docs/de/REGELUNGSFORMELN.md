@@ -51,6 +51,31 @@ Code:
 Code:
 - `firmware/control.py::PID2DOFPercent.update`
 
+### Feedforward-PID (`FF_PID`)
+
+- `u = clamp(u_ff + u_fb)`
+- `u_fb = Kp*e + I + LPF(-Kd*d(PV)/dt)`
+- MANUAL: `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(SP - ambient)`
+- FOPDT_GAIN: `u_ff = u0 + (SP - ambient)/K`
+
+Code:
+- `firmware/control.py::PIDFeedForwardPercent._feedforward`
+- `firmware/control.py::PIDFeedForwardPercent.update`
+
+### Gain-Scheduled PID (`GAIN_SCHED`)
+
+- Tabelle: `(sched_var, Kp, Ki, Kd)`
+- `sched_var = PV` oder `SP`
+- Lineare Interpolation zwischen Nachbarpunkten:
+  - `Kp = Kp0 + a*(Kp1-Kp0)`
+  - `Ki = Ki0 + a*(Ki1-Ki0)`
+  - `Kd = Kd0 + a*(Kd1-Kd0)`
+- Bei Änderung von `Ki`: `I <- I*(Ki_new/Ki_old)`
+
+Code:
+- `firmware/control.py::GainScheduledPIDPercent._interp_gains`
+- `firmware/control.py::GainScheduledPIDPercent.update`
+
 ## Relay-Tuning
 
 ### Grenzverstärkung
@@ -127,3 +152,46 @@ Code:
 
 Code:
 - `firmware/control.py::TwoPositionPercent.update`
+
+## Fuzzy-Regler
+
+### Inkrementeller Sugeno-Fuzzy-Regler
+
+- `e = SP - PV`
+- `de = d(e)/dt`
+- Normierung:
+  - `e_n = clamp(e/FUZZY_E_SCALE_C, -1, 1)`
+  - `de_n = clamp(de/FUZZY_DE_SCALE_C_PER_S, -1, 1)`
+- Sugeno-Singleton-Ausgang:
+  - `du_norm = sum(w_ij*c_ij)/sum(w_ij)`
+- Inkrementelles Stellgesetz:
+  - `u[k] = clamp(u[k-1] + FUZZY_DU_RATE_MAX*dt*du_norm)`
+
+Code:
+- `firmware/control.py::_mf5`
+- `firmware/control.py::FuzzySugenoIncrementalPercent.update`
+
+## Modellbasierte Regelung
+
+### MPC-lite
+
+- `alpha = exp(-dt/tau)`, `beta = 1 - alpha`
+- `x[k+1] = alpha*x[k] + beta*K*(u_del[k] - u0)`
+- `y_hat[k] = y0 + x[k]`
+- Kostenfunktion:
+  - `J = sum_i (SP - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
+- Verwendet 2-Move-Blocking: `u0`, `u1`, danach Halten von `u1`
+
+Code:
+- `firmware/control.py::MPCLitePercent._simulate_cost`
+- `firmware/control.py::MPCLitePercent.update`
+
+### Smith Predictor PI (`SMITH_PI`)
+
+- `G(s) = K/(tau*s + 1) * exp(-theta*s)`
+- `y_pred = y_model_nodelay + (PV - y_model_delay)`
+- `e = SP - y_pred`
+- `u = clamp(Kp*e + I)`
+
+Code:
+- `firmware/control.py::SmithPredictorPI.update`

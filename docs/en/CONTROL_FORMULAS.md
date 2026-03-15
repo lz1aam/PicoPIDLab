@@ -72,6 +72,48 @@ For each formula: equation, symbols/units, source, and code location.
 - Code:
   - `firmware/control.py::PID2DOFPercent.update`
 
+### Feedforward PID (`FF_PID`)
+- Equation:
+  - Total output: `u = clamp(u_ff + u_fb)`
+  - Feedback path:
+    - `e = SP - PV`
+    - `P = Kp*e`
+    - `I[k] = I[k-1] + Ki*e*dt` (conditional integration against total saturation)
+    - `D = LPF(-Kd*d(PV)/dt)`
+    - `u_fb = P + I + D`
+  - Feedforward path, manual mode:
+    - `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(SP - ambient)`
+  - Feedforward path, FOPDT-gain mode:
+    - `u_ff = u0 + (SP - ambient)/K`
+- Source:
+  - D. E. Seborg, T. F. Edgar, D. A. Mellichamp, F. J. Doyle III, *Process Dynamics and Control*, 3rd ed. (feedforward compensation structure).
+  - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID feedback path conventions).
+- Code:
+  - `firmware/control.py::PIDFeedForwardPercent._feedforward`
+  - `firmware/control.py::PIDFeedForwardPercent.update`
+
+### Gain-scheduled PID (`GAIN_SCHED`)
+- Equation:
+  - Schedule breakpoints: `(sched_var, Kp, Ki, Kd)`
+  - Scheduling variable:
+    - `sched_var = PV` if `GS_VARIABLE='PV'`
+    - `sched_var = SP` if `GS_VARIABLE='SP'`
+  - Linear interpolation between neighboring breakpoints:
+    - `a = (sched_var - x0)/(x1 - x0)`
+    - `Kp = Kp0 + a*(Kp1 - Kp0)`
+    - `Ki = Ki0 + a*(Ki1 - Ki0)`
+    - `Kd = Kd0 + a*(Kd1 - Kd0)`
+  - Integral rescaling when `Ki` changes:
+    - `I <- I*(Ki_new/Ki_old)` for `Ki_old > 0`, `Ki_new > 0`
+  - Control law then follows standard parallel PID:
+    - `u = clamp(Kp*e + I + LPF(-Kd*d(PV)/dt))`
+- Source:
+  - J. S. Shamma, M. Athans, "Gain Scheduling: Potential Hazards and Possible Remedies," *IEEE Control Systems Magazine*, 1992.
+  - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID base law).
+- Code:
+  - `firmware/control.py::GainScheduledPIDPercent._interp_gains`
+  - `firmware/control.py::GainScheduledPIDPercent.update`
+
 ## Relay Tuning
 
 ### Ultimate gain from relay test
@@ -189,3 +231,67 @@ For each formula: equation, symbols/units, source, and code location.
   - otherwise hold previous state
 - Code:
   - `firmware/control.py::TwoPositionPercent.update`
+
+## Fuzzy Control
+
+### Sugeno incremental fuzzy controller
+- Equation:
+  - Inputs:
+    - `e = SP - PV`
+    - `de = d(e)/dt`
+  - Normalization:
+    - `e_n = clamp(e/FUZZY_E_SCALE_C, -1, 1)`
+    - `de_n = clamp(de/FUZZY_DE_SCALE_C_PER_S, -1, 1)`
+  - Product inference with 5x5 rule table and Sugeno singleton consequents:
+    - `du_norm = (sum_i sum_j w_ij*c_ij)/(sum_i sum_j w_ij)`
+    - `w_ij = mu_e_i(e_n)*mu_de_j(de_n)`
+  - Incremental output law:
+    - `u[k] = clamp(u[k-1] + FUZZY_DU_RATE_MAX*dt*du_norm)`
+- Source:
+  - M. Sugeno, *Industrial Applications of Fuzzy Control*, 1985.
+  - H.-J. Zimmermann, *Fuzzy Set Theory and Its Applications*, 4th ed.
+- Code:
+  - `firmware/control.py::_mf5`
+  - `firmware/control.py::FuzzySugenoIncrementalPercent.update`
+
+## Model-Based Control
+
+### MPC-lite (FOPDT predictive control)
+- Equation:
+  - Internal FOPDT model with exact ZOH discretization:
+    - `alpha = exp(-dt/tau)`
+    - `beta = 1 - alpha`
+    - `x[k+1] = alpha*x[k] + beta*K*(u_del[k] - u0)`
+    - `y_hat[k] = y0 + x[k]`
+  - Dead-time handled with delayed input queue `u_del[k]`
+  - Candidate sequence uses 2-move blocking:
+    - first move `u0`
+    - second move `u1`
+    - hold `u1` over the remaining horizon
+  - Cost:
+    - `J = sum_i (SP - y_pred[i])^2 + lambda_move*((u0-u_prev)^2 + (u1-u0)^2)`
+- Source:
+  - E. F. Camacho, C. Bordons, *Model Predictive Control*, 2nd ed.
+  - This firmware uses a deliberately simplified educational two-move blocking approximation for RP2040 practicality.
+- Code:
+  - `firmware/control.py::MPCLitePercent._simulate_cost`
+  - `firmware/control.py::MPCLitePercent.update`
+
+### Smith Predictor PI (`SMITH_PI`)
+- Equation:
+  - FOPDT model:
+    - `G(s) = K/(tau*s + 1) * exp(-theta*s)`
+  - Two internal model trajectories are propagated:
+    - delayed model output `y_model_delay`
+    - delay-free model output `y_model_nodelay`
+  - Corrected predictor output:
+    - `y_pred = y_model_nodelay + (PV - y_model_delay)`
+  - PI control is applied to the predicted output:
+    - `e = SP - y_pred`
+    - `u = clamp(Kp*e + I)`
+    - `I[k] = I[k-1] + Ki*e*dt` (conditional integration)
+- Source:
+  - O. J. M. Smith, "Closer Control of Loops with Dead Time," *Chemical Engineering Progress*, 1957.
+  - D. E. Seborg, T. F. Edgar, D. A. Mellichamp, F. J. Doyle III, *Process Dynamics and Control*, 3rd ed.
+- Code:
+  - `firmware/control.py::SmithPredictorPI.update`

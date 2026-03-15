@@ -7,6 +7,64 @@ Students experiment with ON/OFF, PID, Fuzzy, and MPC algorithms on real hardware
 
 Primary runtime is **MicroPython on RP2040** (Pico class boards).
 
+![PicoPID Lab hardware](hardware/PicoPIDLab-picture.jpg)
+
+## What This Shows
+
+The platform is built around one simple lab workflow:
+- identify the thermal plant
+- tune a controller
+- run closed-loop experiments
+- compare plots and metrics
+
+Core observed variables:
+- `PV` measured temperature [°C]
+- `SP` setpoint temperature [°C]
+- `OP` heater output [%]
+- `YH` model estimate [°C] in MPC mode
+- `YP` model prediction [°C] in MPC mode
+
+Typical plot meaning:
+- `PV` vs `SP` shows how well the controller tracks the target temperature
+- `OP` shows how aggressively the heater is driven
+- FOPDT identification plots show the open-loop thermal step used to estimate `K`, `tau`, and `theta`
+- tuning and standard runs produce metrics and comparison plots for repeatable lab reports
+
+## Example Results
+
+### FOPDT identification
+
+![FOPDT identification plot](hardware/examples/fopdt-identification.png)
+
+Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, and `theta`.
+
+### PID relay tuning
+
+![PID relay tuning plot](hardware/examples/pid-relay-tuning.png)
+
+Relay cycling around the target temperature for extracting oscillation metrics and tuned gains.
+
+### PID feedforward tracking
+
+![PID feedforward tracking plot](hardware/examples/pid-feedforward-tracking.png)
+
+Closed-loop tracking with feedforward support, showing `PV` convergence to `SP` and the corresponding heater effort.
+
+### MPC tracking
+
+![MPC tracking plot](hardware/examples/mpc-tracking.png)
+
+Predictive control example with `YH` and `YP`, showing model-based tracking and constrained output moves.
+
+Students primarily edit one file:
+- `firmware/config.py`
+
+## Project Layout
+
+- `firmware/` firmware modules on device
+- `runner/lab.py` host lab terminal + experiment runner
+- `runner/lab.yaml` host experiment/config source of truth
+
 Documentation language folders:
 - `docs/en/` (English)
 - `docs/bg/` (Bulgarian)
@@ -15,20 +73,6 @@ Documentation language folders:
 - `docs/uk/` (Ukrainian)
 - `docs/it/` (Italian)
 - `docs/fr/` (French)
-
-Students primarily edit one file:
-- `firmware/config.py`
-
-Core observed variables:
-- `PV` measured temperature [°C]
-- `SP` setpoint temperature [°C]
-- `OP` heater output [%]
-
-## Project Layout
-
-- `firmware/` firmware modules on device
-- `runner/lab.py` host lab terminal + experiment runner
-- `runner/lab.yaml` host experiment/config source of truth
 
 ## Quick Start
 

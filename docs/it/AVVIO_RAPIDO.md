@@ -1,6 +1,6 @@
 # Avvio rapido
 
-Versione target: **v1.2.8**
+Versione target: **v1.2.9**
 
 Workflow supportati:
 - Thonny (terminale firmware diretto)

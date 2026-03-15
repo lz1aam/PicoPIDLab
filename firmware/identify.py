@@ -51,19 +51,19 @@ def _service_gc(now_ms: int, next_gc_ms: int, mem_free_fn, gc_low_mem_bytes, las
     return next_gc_ms, last_emergency_gc_ms
 
 
-def tuning_rule_label(code: str) -> str:
-    rule = str(code).upper()
-    if rule.startswith("ZN1_"):
+def tuning_method_label(code: str) -> str:
+    method = str(code).upper()
+    if method.startswith("ZN1_"):
         family = "Ziegler-Nichols 1"
-    elif rule.startswith("ZN2_"):
+    elif method.startswith("ZN2_"):
         family = "Ziegler-Nichols 2"
-    elif rule.startswith("CC_"):
+    elif method.startswith("CC_"):
         family = "Cohen-Coon"
-    elif rule.startswith("TL_"):
+    elif method.startswith("TL_"):
         family = "Tyreus-Luyben"
     else:
         return str(code)
-    mode = rule.split("_", 1)[-1]
+    mode = method.split("_", 1)[-1]
     return "%s (%s)" % (family, mode)
 
 
@@ -381,10 +381,10 @@ def _model_rule_set(rule: str, K: float, tau: float, theta: float):
 def run_model_tuning(cfg, model):
     """Model-based tuning from FOPDT model using selected MODEL rule."""
     K, tau, theta = _require_fopdt(model)
-    selected_rule = str(cfg.TUNING_RULE).upper()
+    selected_rule = str(cfg.TUNING_METHOD).upper()
     base_set = _model_rule_set(selected_rule, K, tau, theta)
     if base_set is None:
-        raise ValueError("TUNING model requires TUNING_RULE in {ZN1_*, CC_*} (current: %s)" % selected_rule)
+        raise ValueError("TUNING model requires TUNING_METHOD in {ZN1_*, CC_*} (current: %s)" % selected_rule)
 
     KP = float(base_set["KP"])
     KI = float(base_set["KI"])
@@ -396,12 +396,12 @@ def run_model_tuning(cfg, model):
 
     print("# RESULT:")
     print("# ========================================")
-    print("# TUNING completed")
-    print("# FOPDT model used: K=%.6f °C/%% tau=%.2f s theta=%.2f s" % (K, tau, theta))
-    print("# Applied set: %s" % tuning_rule_label(selected_rule))
-    print("# Applied PARALLEL form: Kp=%s Ki=%s Kd=%s"
+    print("# PID tuning")
+    print("# model used: K=%.6f °C/%% tau=%.2f s theta=%.2f s" % (K, tau, theta))
+    print("# tuning method: %s" % tuning_method_label(selected_rule))
+    print("# applied parallel gains: Kp=%s Ki=%s Kd=%s"
           % (_fmt_opt(applied["KP"]), _fmt_opt(applied["KI"]), _fmt_opt(applied["KD"])))
-    print("# Applied IDEAL form: Kc=%s Ti=%s Td=%s"
+    print("# applied ideal gains: Kc=%s Ti=%s Td=%s"
           % (_fmt_opt(applied["KP"]), _fmt_opt(applied["TI_S"], "s"), _fmt_opt(applied["TD_S"], "s")))
     print("# ========================================")
     return KP, KI, KD
@@ -454,11 +454,14 @@ def _ring_values(ring):
     return out
 
 
-def _moving_avg(x_list, w: int):
+def _moving_avg_iter(x_list, w: int):
+    """Yield the same prefix/rolling average sequence as the old _moving_avg()."""
     if w <= 1:
-        return list(x_list)
+        for v in x_list:
+            yield float(v)
+        return
+
     w = int(w)
-    out = []
     s = 0.0
     q = [0.0] * w
     q_len = 0
@@ -476,16 +479,15 @@ def _moving_avg(x_list, w: int):
             q_head += 1
             if q_head >= w:
                 q_head = 0
-        out.append(s / q_len)
-    return out
+        yield (s / q_len)
 
 
-def _find_time_at_fraction(t_s_list, y_list, t0_s: float, y_i: float, y_f: float, frac: float) -> float:
-    """Interpolated crossing time for step fraction target."""
+def _find_time_at_fraction_stream(t_s_list, y_raw_list, smooth_n: int, t0_s: float, y_i: float, y_f: float, frac: float) -> float:
+    """Interpolated crossing time for a streamed moving-average response."""
     target = y_i + float(frac) * (y_f - y_i)
     prev_t = None
     prev_y = None
-    for ti, yi in zip(t_s_list, y_list):
+    for ti, yi in zip(t_s_list, _moving_avg_iter(y_raw_list, smooth_n)):
         if ti < t0_s:
             prev_t = float(ti)
             prev_y = float(yi)
@@ -508,28 +510,48 @@ def _find_time_at_fraction(t_s_list, y_list, t0_s: float, y_i: float, y_f: float
     return float("nan")
 
 
-def _simulate_fopdt_step(t_rel_s_list, y_i: float, u0: float, u1: float, K: float, tau: float, theta: float):
-    dy = K * (u1 - u0)
-    y_hat = []
-    for tr in t_rel_s_list:
-        tr = float(tr)
-        if tr < theta:
-            y_hat.append(y_i)
-        else:
-            x = (tr - theta) / tau
-            y_hat.append(y_i + dy * (1.0 - math.exp(-x)))
-    return y_hat
-
-
-def _rmse(y_list, y_hat_list) -> float:
-    n = min(len(y_list), len(y_hat_list))
-    if n <= 0:
+def _tail_avg_from_smoothed(t_s_list, y_raw_list, smooth_n: int, cutoff_t: float) -> float:
+    """Return tail average of streamed moving-average values for t >= cutoff_t."""
+    tail_sum = 0.0
+    tail_n = 0
+    last_vals = _ring_init(10)
+    for t_s, y_s in zip(t_s_list, _moving_avg_iter(y_raw_list, smooth_n)):
+        _ring_push(last_vals, float(y_s))
+        if float(t_s) >= float(cutoff_t):
+            tail_sum += float(y_s)
+            tail_n += 1
+    if tail_n > 0:
+        return tail_sum / tail_n
+    vals = _ring_values(last_vals)
+    if not vals:
         return float("nan")
-    s = 0.0
-    for i in range(n):
-        e = float(y_list[i]) - float(y_hat_list[i])
-        s += e * e
-    return math.sqrt(s / n)
+    return sum(float(v) for v in vals) / float(len(vals))
+
+
+def _rmse_for_candidate_stream(
+    t_s_list,
+    y_raw_list,
+    smooth_n: int,
+    t0_s: float,
+    y_i: float,
+    dy_step: float,
+    tau_i: float,
+    theta_i: float,
+) -> float:
+    """Return candidate RMSE against streamed moving-average values."""
+    se = 0.0
+    n_err = 0
+    for t_s, y_meas in zip(t_s_list, _moving_avg_iter(y_raw_list, smooth_n)):
+        tr = float(t_s) - float(t0_s)
+        if tr < float(theta_i):
+            y_hat = float(y_i)
+        else:
+            x = (tr - float(theta_i)) / float(tau_i)
+            y_hat = float(y_i) + float(dy_step) * (1.0 - math.exp(-x))
+        e = float(y_meas) - float(y_hat)
+        se += e * e
+        n_err += 1
+    return math.sqrt(se / max(1, n_err))
 
 
 def run_test(sensor, heater, indicator, profile, poll_cmd=None, overtemp_cb=None, telemetry_cb=None):
@@ -684,26 +706,12 @@ def run_test(sensor, heater, indicator, profile, poll_cmd=None, overtemp_cb=None
         return None
 
     gc.collect()
-    y_s = _moving_avg(y_list, smooth_n)
     if step_steady_reached and math.isfinite(step_steady_y):
         y_f = float(step_steady_y)
     else:
         t_end = t_list[-1]
         cutoff_t = t_end - 10.0
-        tail_sum = 0.0
-        tail_n = 0
-        for t, y in zip(t_list, y_s):
-            if t >= cutoff_t:
-                tail_sum += y
-                tail_n += 1
-        if tail_n <= 0:
-            start = len(y_s) - 10
-            if start < 0:
-                start = 0
-            for i in range(start, len(y_s)):
-                tail_sum += y_s[i]
-                tail_n += 1
-        y_f = tail_sum / max(1, tail_n)
+        y_f = _tail_avg_from_smoothed(t_list, y_list, smooth_n, cutoff_t)
 
     du = float(u1 - u0)
     dy = float(y_f - y_i)
@@ -713,11 +721,11 @@ def run_test(sensor, heater, indicator, profile, poll_cmd=None, overtemp_cb=None
 
     K = dy / du
 
-    t28 = _find_time_at_fraction(t_list, y_s, t0_s, y_i, y_f, 0.283)
-    t40 = _find_time_at_fraction(t_list, y_s, t0_s, y_i, y_f, 0.400)
-    t63 = _find_time_at_fraction(t_list, y_s, t0_s, y_i, y_f, 0.632)
-    t35 = _find_time_at_fraction(t_list, y_s, t0_s, y_i, y_f, 0.353)
-    t85 = _find_time_at_fraction(t_list, y_s, t0_s, y_i, y_f, 0.853)
+    t28 = _find_time_at_fraction_stream(t_list, y_list, smooth_n, t0_s, y_i, y_f, 0.283)
+    t40 = _find_time_at_fraction_stream(t_list, y_list, smooth_n, t0_s, y_i, y_f, 0.400)
+    t63 = _find_time_at_fraction_stream(t_list, y_list, smooth_n, t0_s, y_i, y_f, 0.632)
+    t35 = _find_time_at_fraction_stream(t_list, y_list, smooth_n, t0_s, y_i, y_f, 0.353)
+    t85 = _find_time_at_fraction_stream(t_list, y_list, smooth_n, t0_s, y_i, y_f, 0.853)
 
     candidates = {}
     broida_theta_clamped = False
@@ -756,19 +764,9 @@ def run_test(sensor, heater, indicator, profile, poll_cmd=None, overtemp_cb=None
             continue
         tau_i = float(item["tau"])
         theta_i = float(item["theta"])
-        se = 0.0
-        n_err = 0
-        for t, y_meas in zip(t_list, y_s):
-            tr = float(t - t0_s)
-            if tr < theta_i:
-                y_hat = y_i
-            else:
-                x = (tr - theta_i) / tau_i
-                y_hat = y_i + dy_step * (1.0 - math.exp(-x))
-            e = float(y_meas) - float(y_hat)
-            se += e * e
-            n_err += 1
-        rmse_i = math.sqrt(se / max(1, n_err))
+        rmse_i = _rmse_for_candidate_stream(
+            t_list, y_list, smooth_n, t0_s, y_i, dy_step, tau_i, theta_i
+        )
         item["rmse"] = float(rmse_i)
         if (best_err is None) or (rmse_i < best_err):
             best_err = float(rmse_i)
@@ -781,25 +779,27 @@ def run_test(sensor, heater, indicator, profile, poll_cmd=None, overtemp_cb=None
 
     print("# RESULT:")
     print("# ========================================")
-    print("# FOPDT model")
-    print("# initial steady temperature y0=%.3f °C" % y_i)
-    print("# final steady temperature y1=%.3f °C" % y_f)
-    print("# input step delta_u=%.1f%%" % du)
-    print("# output step delta_y=%.3f °C" % dy)
-    print("# process gain K=%.6f °C/%%" % K)
-    print("# FOPDT candidates:")
+    print("# FOPDT identification")
+    print("# initial steady temperature: %.3f °C" % y_i)
+    print("# final steady temperature: %.3f °C" % y_f)
+    print("# input step: %.1f%% -> %.1f%%" % (u0, u1))
+    print("# output step: %.3f °C" % dy)
+    print("# process gain: %.6f °C/%%" % K)
+    print("# candidate models:")
     for method_name in ("SMITH", "SK", "BROIDA"):
         item = candidates.get(method_name, None)
+        display_name = "Smith" if method_name == "SMITH" else ("Broida" if method_name == "BROIDA" else method_name)
         if item is None:
-            print("#   %-6s unavailable (crossings not found)" % method_name)
+            print("#   %s: unavailable (crossings not found)" % display_name)
         else:
-            print("#   %-6s tau=%.2f s theta=%.2f s rmse=%.3f °C"
-                  % (method_name, float(item["tau"]), float(item["theta"]), float(item["rmse"])))
+            print("#   %s: tau=%.2f s theta=%.2f s rmse=%.3f °C"
+                  % (display_name, float(item["tau"]), float(item["theta"]), float(item["rmse"])))
     if broida_theta_clamped:
-        print("# BROIDA theta was clamped to 0.0 s (raw estimate < 0)")
+        print("# note: Broida theta was clamped to 0.0 s (raw estimate < 0)")
+    print("# selected method: %s (lowest RMSE)" % ("Smith" if best_method == "SMITH" else ("Broida" if best_method == "BROIDA" else best_method)))
+    print("# applied model: K=%.6f °C/%% tau=%.2f s theta=%.2f s rmse=%.3f °C"
+          % (K, tau, theta, err))
     print("# ========================================")
-    print("# RESULT: applied method=%s (lowest RMSE): K=%.6f °C/%% tau=%.2f s theta=%.2f s rmse=%.3f °C"
-          % (best_method, K, tau, theta, err))
     model = {
         "K": float(K),
         "tau_s": float(tau),
@@ -1055,10 +1055,10 @@ def run_relay_tuning(
         "TL_PI": _rule_terms(tl_base, "PI"),
         "TL_PID": _rule_terms(tl_base, "PID"),
     }
-    requested_rule = str(cfg.TUNING_RULE).upper()
+    requested_rule = str(cfg.TUNING_METHOD).upper()
     selected_rule = requested_rule
     if selected_rule not in sets:
-        return _abort_tuning("TUNING relay requires TUNING_RULE in {ZN2_*, TL_*} (current: %s)" % requested_rule)
+        return _abort_tuning("TUNING relay requires TUNING_METHOD in {ZN2_*, TL_*} (current: %s)" % requested_rule)
 
     pb_span = float(cfg.SPAN)
     base_set = sets.get(selected_rule, sets["ZN2_PID"])
@@ -1068,16 +1068,16 @@ def run_relay_tuning(
 
     print("# RESULT:")
     print("# ========================================")
-    print("# TUNING completed")
+    print("# PID tuning")
     print("# relay metrics: A=%.3f °C d_eff=%.3f%% Ku=%.3f Pu=%.3f s PV_pp=%.3f °C"
           % (A, d_eff, Ku, Pu, pv_pp))
-    print("# relay summary: type=2pos-onoff band=±%.2f °C u_high=%.1f%% u_low=%.1f%% cycles_used=%d"
+    print("# relay summary: type=2pos-onoff band=±%.2f °C u_high=%.1f%% u_low=%.1f%% cycles used=%d"
           % (band, u_high, u_low, len(periods_keep)))
-    print("# Applied set: %s" % tuning_rule_label(selected_rule))
+    print("# tuning method: %s" % tuning_method_label(selected_rule))
     applied = _pid_views(KP, KI, KD, pb_span)
-    print("# Applied PARALLEL form: Kp=%s Ki=%s Kd=%s"
+    print("# applied parallel gains: Kp=%s Ki=%s Kd=%s"
           % (_fmt_opt(applied["KP"]), _fmt_opt(applied["KI"]), _fmt_opt(applied["KD"])))
-    print("# Applied IDEAL form: Kc=%s Ti=%s Td=%s"
+    print("# applied ideal gains: Kc=%s Ti=%s Td=%s"
           % (_fmt_opt(applied["KP"]), _fmt_opt(applied["TI_S"], "s"), _fmt_opt(applied["TD_S"], "s")))
     print("# ========================================")
 

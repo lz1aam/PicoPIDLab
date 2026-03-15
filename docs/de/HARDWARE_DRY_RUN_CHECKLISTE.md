@@ -33,7 +33,7 @@ Diese Checkliste wird auf realer Hardware nach dem Flashen verwendet.
 
 1. Konfigurieren:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN2_PID`
+   - `TUNING_METHOD ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

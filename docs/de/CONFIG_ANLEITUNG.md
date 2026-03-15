@@ -35,9 +35,9 @@ Dieses Dokument enthält die ausführlichen Hinweise.
 ## Schnellübungen
 
 - Windup-Demo: `PID_AW_TYPE="NONE"` vs `"CLAMP"`
-- Relay-Tuning: `TUNING_RULE="ZN2_PID"`
-- Modell-Tuning: `TUNING_RULE="CC_PID"` oder `ZN1_PID`
-- Algorithmusform: `PID_ALGORITHM` wechseln und `pid report` vergleichen
+- Relay-Tuning: `TUNING_METHOD="ZN2_PID"`
+- Modell-Tuning: `TUNING_METHOD="CC_PID"` oder `ZN1_PID`
+- Algorithmusform: `PID_ALGORITHM` wechseln und `pid` vergleichen
 
 ## Modusspezifische Hinweise
 

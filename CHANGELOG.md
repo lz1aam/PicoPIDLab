@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [1.2.9] - 2026-03-15
+
+### Changed
+- Renamed PID tuning terminology from `TUNING_RULE` to `TUNING_METHOD` across firmware, runner, and docs.
+- Simplified firmware prompt commands by replacing `pid report` with `pid` and collapsing `help` to a single overview screen.
+- Refined firmware `params` and `pid` outputs for clearer group ownership, cleaner formatting, and more consistent wording.
+- Bumped firmware version to `1.2.9`.
+
 ## [1.2.5] - 2026-03-06
 
 ### Added

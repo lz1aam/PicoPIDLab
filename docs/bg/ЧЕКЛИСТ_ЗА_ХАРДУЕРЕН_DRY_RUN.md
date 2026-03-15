@@ -33,7 +33,7 @@
 
 1. Конфигурирайте:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN2_PID`
+   - `TUNING_METHOD ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`
@@ -49,7 +49,7 @@
 2. `# PHASE: TUNING soak`
 3. `# PHASE: TUNING relay`
 4. `# RESULT: TUNING completed`
-5. `# RESULT: Applied set: ...`
+5. `# tuning method: ...`
 6. `# RESULT: TUNING: runtime gains updated -> Kp=... Ki=... Kd=...`
 7. `# FINISH: done`
 8. `# READY: stopped`

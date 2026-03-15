@@ -9,7 +9,7 @@ Para terminología:
 
 - Los parámetros de ejecución se aplican directamente en firmware.
 - La ruta de control activa se determina por `CONTROL_MODE` y (en PID) por `PID_VARIANT`.
-- `TUNING_RULE` selecciona la familia de sintonía (modelo o relay).
+- `TUNING_METHOD` selecciona la familia de sintonía (modelo o relay).
 
 ## CONTROL_MODE
 
@@ -33,7 +33,7 @@ Para terminología:
 - `PARALLEL` usa principalmente `KP`, `KI`, `KD`
 - `IDEAL`/`SERIES` usan principalmente `KC`, `TI_S`, `TD_S`
 
-### TUNING_RULE
+### TUNING_METHOD
 
 Basadas en modelo:
 - `ZN1_P`, `ZN1_PI`, `ZN1_PID`

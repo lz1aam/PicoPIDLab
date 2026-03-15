@@ -35,15 +35,15 @@ This page contains the longer guidance that was removed from the config file.
 - `PID_VARIANT="2DOF"`: requires `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="FF_PID"`: requires `PID_ALGORITHM="PARALLEL"`
 - `PID_VARIANT="SMITH_PI"`: requires active FOPDT model values (`MODEL_*`) and active PI gains (`Kp!=0`, `Ki>0`)
-- `TUNING_RULE` in model family (`ZN1_*`, `CC_*`): `tune` executes model-based tuning
-- `TUNING_RULE` in relay family (`ZN2_*`, `TL_*`): `tune` executes relay tuning and applies gains
+- `TUNING_METHOD` in model family (`ZN1_*`, `CC_*`): `tune` executes model-based tuning
+- `TUNING_METHOD` in relay family (`ZN2_*`, `TL_*`): `tune` executes relay tuning and applies gains
 
 ## Quick Exercises
 
 - Windup demo: `PID_VARIANT="PID"`, compare `PID_AW_TYPE="NONE"` vs `"CLAMP"`.
-- Relay auto-tuning demo: `TUNING_RULE="ZN2_PID"`.
-- Model-tuning demo: `TUNING_RULE="CC_PID"` (recommended) or `ZN1_PID`.
-- Algorithm-form demo: switch `PID_ALGORITHM` and compare `pid report` output.
+- Relay auto-tuning demo: `TUNING_METHOD="ZN2_PID"`.
+- Model-tuning demo: `TUNING_METHOD="CC_PID"` (recommended) or `ZN1_PID`.
+- Algorithm-form demo: switch `PID_ALGORITHM` and compare `pid` output.
 - ON/OFF demo: hold `SETPOINT_C`, sweep `ONOFF_HYST_C`, observe switch frequency vs oscillation amplitude.
 - FOPDT demo: keep presoak at `OP=0%` (fixed), choose moderate `FOPDT_U1_PERCENT`, run `model` long enough to see settling.
 

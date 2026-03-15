@@ -35,9 +35,9 @@ Este documento contiene la guía extendida.
 ## Ejercicios rápidos
 
 - Demo de windup: `PID_AW_TYPE="NONE"` vs `"CLAMP"`
-- Sintonía relay: `TUNING_RULE="ZN2_PID"`
-- Sintonía por modelo: `TUNING_RULE="CC_PID"` o `ZN1_PID`
-- Forma algorítmica: cambiar `PID_ALGORITHM` y comparar `pid report`
+- Sintonía relay: `TUNING_METHOD="ZN2_PID"`
+- Sintonía por modelo: `TUNING_METHOD="CC_PID"` o `ZN1_PID`
+- Forma algorítmica: cambiar `PID_ALGORITHM` y comparar `pid`
 
 ## Notas por modo
 

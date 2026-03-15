@@ -63,7 +63,7 @@ GS_TABLE = (                   # (temp_c, kp, ki, kd)
 )
 
 # Tuning
-TUNING_RULE = "CC_PID"        # Model: ZN1_*/CC_*  Relay: ZN2_*/TL_*
+TUNING_METHOD = "CC_PID"        # Model: ZN1_*/CC_*  Relay: ZN2_*/TL_*
 
 # Relay tuning
 TUNING_TARGET_C = 50.0        # Relay target [degC]
@@ -131,17 +131,17 @@ MODEL_METHOD = "SK"           # Optional method label
 _ALLOWED_CONTROL_MODES = ("PID", "ONOFF", "FUZZY", "MPC")
 _ALLOWED_SETPOINT_TYPES = ("STEP", "RAMP")
 _ALLOWED_DIST_MODES = ("STEP", "PULSE")
-_ALLOWED_TUNING_RULES = (
+_ALLOWED_TUNING_METHODS = (
     "ZN1_P", "ZN1_PI", "ZN1_PID",
     "CC_P", "CC_PI", "CC_PID",
     "ZN2_P", "ZN2_PI", "ZN2_PID",
     "TL_P", "TL_PI", "TL_PID",
 )
-MODEL_TUNING_RULES = (
+MODEL_TUNING_METHODS = (
     "ZN1_P", "ZN1_PI", "ZN1_PID",
     "CC_P", "CC_PI", "CC_PID",
 )
-RELAY_TUNING_RULES = (
+RELAY_TUNING_METHODS = (
     "ZN2_P", "ZN2_PI", "ZN2_PID",
     "TL_P", "TL_PI", "TL_PID",
 )
@@ -224,13 +224,13 @@ def _validate_pid_variant(variant: str, aw_type: str, algorithm: str) -> None:
 
 
 def _validate_pid_tuning() -> None:
-    rule = str(TUNING_RULE).upper()
-    if rule not in _ALLOWED_TUNING_RULES:
-        raise ValueError("TUNING_RULE must be one of: %s" % (_ALLOWED_TUNING_RULES,))
+    rule = str(TUNING_METHOD).upper()
+    if rule not in _ALLOWED_TUNING_METHODS:
+        raise ValueError("TUNING_METHOD must be one of: %s" % (_ALLOWED_TUNING_METHODS,))
     target_c = float(TUNING_TARGET_C)
     if (target_c <= -50.0) or (target_c >= 200.0):
         raise ValueError("TUNING_TARGET_C looks unrealistic; check units (°C)")
-    if rule in RELAY_TUNING_RULES:
+    if rule in RELAY_TUNING_METHODS:
         if float(TUNING_BAND_C) <= 0.0:
             raise ValueError("TUNING_BAND_C must be > 0")
         if int(TUNING_CYCLES) < 1:

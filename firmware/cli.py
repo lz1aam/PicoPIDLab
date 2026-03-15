@@ -14,7 +14,7 @@ except Exception:
 _STRING_PARAMS_UPPER = {
     "CONTROL_MODE",
     "SETPOINT_TYPE",
-    "TUNING_RULE",
+    "TUNING_METHOD",
     "PID_VARIANT",
     "PID_AW_TYPE",
     "PID_ALGORITHM",
@@ -30,17 +30,21 @@ _poll_err_count = 0
 
 _PARAM_GROUPS = {
     "core": (
-        "General settings",
+        "Core runtime settings",
         (
-            ("CONTROL_MODE", "ONOFF/PID/FUZZY/MPC"),
-            ("SETPOINT_TYPE", "STEP or RAMP"),
+            ("SETPOINT_TYPE", "STEP/RAMP"),
             ("SETPOINT_C", "Target [°C]"),
             ("SETPOINT_RAMP_RATE", "Ramp rate [°C/s]"),
-            ("SPAN", "PB span [°C]"),
             ("TS_S", "Sample period [s]"),
             ("TELEMETRY_MODE", "INFO/NORMAL/MPC"),
-            ("EXPERIMENT_RUN_S", "Run time [s], None=until stop"),
-            ("DIST_ENABLE", "Enable disturbance"),
+            ("EXPERIMENT_RUN_S", "Run time [s], None=until stopped"),
+        ),
+    ),
+    "control": (
+        "Control-run settings",
+        (
+            ("CONTROL_MODE", "ONOFF/PID/FUZZY/MPC"),
+            ("DIST_ENABLE", "Enable output disturbance"),
             ("DIST_MODE", "STEP/PULSE"),
             ("DIST_MAG_PCT", "Disturbance OP [%]"),
             ("DIST_START_S", "Disturbance start [s]"),
@@ -58,7 +62,6 @@ _PARAM_GROUPS = {
         (
             ("PID_VARIANT", "PID/2DOF/FF_PID/GAIN_SCHED/SMITH_PI"),
             ("PID_AW_TYPE", "NONE/CLAMP/BACKCALC"),
-            ("TUNING_RULE", "ZN1_*/CC_* or ZN2_*/TL_*"),
             ("PID_ALGORITHM", "IDEAL/PARALLEL/SERIES"),
             ("KP", "Kp"),
             ("KI", "Ki [1/s]"),
@@ -70,15 +73,12 @@ _PARAM_GROUPS = {
             ("PID_INTEGRAL_LIMIT", "Integral clamp"),
             ("PID_AW_TRACKING_TIME_S", "Backcalc Tt [s]"),
             ("PID_BETA", "2DOF beta"),
-            ("FF_MODE", "MANUAL or FOPDT_GAIN"),
+            ("FF_MODE", "MANUAL/FOPDT_GAIN"),
             ("FF_GAIN_PCT_PER_C", "FF gain [%/°C]"),
             ("FF_BIAS_PCT", "FF bias [%]"),
             ("FF_AMBIENT_C", "Ambient [°C], None=auto"),
             ("GS_VARIABLE", "Gain schedule variable (PV/SP)"),
-            ("GS_TABLE", "Schedule table"),
-            ("TUNING_TARGET_C", "Relay target [°C]"),
-            ("TUNING_BAND_C", "Relay half-band [°C]"),
-            ("TUNING_CYCLES", "Relay cycles"),
+            ("GS_TABLE", "Gain schedule table"),
         ),
     ),
     "onoff": (
@@ -113,7 +113,7 @@ _PARAM_GROUPS = {
     "tune": (
         "Tune settings",
         (
-            ("TUNING_RULE", "ZN1_*/CC_* or ZN2_*/TL_*"),
+            ("TUNING_METHOD", "ZN1/CC + P|PI|PID (model), ZN2/TL + P|PI|PID (relay)"),
             ("TUNING_TARGET_C", "Relay target [°C]"),
             ("TUNING_BAND_C", "Relay half-band [°C]"),
             ("TUNING_CYCLES", "Relay cycles"),
@@ -131,8 +131,8 @@ _PARAM_GROUPS = {
             ("MODEL_THETA_S", "Model theta [s]"),
             ("MODEL_U0_PCT", "Model u0 [%]"),
             ("MODEL_Y0", "Model y0 [°C]"),
-            ("MODEL_METHOD", "Method label"),
-            ("MODEL_RMSE", "RMSE hint"),
+            ("MODEL_METHOD", "Model identification method"),
+            ("MODEL_RMSE", "Model fit RMSE"),
         ),
     ),
 }
@@ -149,12 +149,11 @@ _ADVANCED_PARAM_KEYS = {
     "MPC_MAX_CANDIDATES",
 }
 
-_PID_ALWAYS_VISIBLE_KEYS = {"PID_VARIANT", "PID_AW_TYPE", "TUNING_RULE", "PID_ALGORITHM"}
+_PID_ALWAYS_VISIBLE_KEYS = {"PID_VARIANT", "PID_AW_TYPE", "PID_ALGORITHM"}
 _PID_PARALLEL_GAIN_KEYS = {"KP", "KI", "KD"}
 _PID_IDEAL_GAIN_KEYS = {"KC", "TI_S", "TD_S"}
 _PID_FF_KEYS = {"FF_MODE", "FF_GAIN_PCT_PER_C", "FF_BIAS_PCT", "FF_AMBIENT_C"}
 _PID_GS_KEYS = {"GS_VARIABLE", "GS_TABLE"}
-_PID_RELAY_TUNING_KEYS = {"TUNING_TARGET_C", "TUNING_BAND_C", "TUNING_CYCLES"}
 _PID_SHAPING_KEYS = {"DERIVATIVE_FILTER_ALPHA", "PID_INTEGRAL_LIMIT"}
 
 _COMMAND_SPECS = (
@@ -163,12 +162,12 @@ _COMMAND_SPECS = (
     ("tune", "run PID tuning"),
     ("model", "run model ID"),
     ("monitor", "heater-off monitor"),
-    ("params [active|all|core|safety|pid|onoff|fuzzy|mpc|tune|model]", "show params"),
+    ("params [scope]", "show params"),
     ("<PARAM> <VALUE>", "assign parameter"),
     ("<PARAM>=<VALUE>", "assign parameter"),
-    ("pid report", "show PID forms"),
+    ("pid", "show PID forms"),
     ("check", "validate config"),
-    ("help [commands|settings|<group>]", "show help"),
+    ("help", "show help"),
     ("exit", "leave prompt"),
 )
 
@@ -215,7 +214,6 @@ def _pid_param_visible_in_active_view(profile_mod, key: str) -> bool:
     algorithm = str(profile_mod.PID_ALGORITHM).upper()
     variant = str(profile_mod.PID_VARIANT).upper()
     aw_type = str(profile_mod.PID_AW_TYPE).upper()
-    tuning_rule = str(profile_mod.TUNING_RULE).upper()
 
     if key in _PID_ALWAYS_VISIBLE_KEYS:
         return True
@@ -231,8 +229,6 @@ def _pid_param_visible_in_active_view(profile_mod, key: str) -> bool:
         return variant == "GAIN_SCHED"
     if key == "PID_AW_TRACKING_TIME_S":
         return (variant == "PID") and (aw_type == "BACKCALC")
-    if key in _PID_RELAY_TUNING_KEYS:
-        return tuning_rule in getattr(profile_mod, "RELAY_TUNING_RULES", ())
     if key in _PID_SHAPING_KEYS:
         return variant in ("PID", "2DOF", "FF_PID", "GAIN_SCHED")
     return False
@@ -243,6 +239,9 @@ def _is_param_visible_in_active_view(profile_mod, group: str, key: str) -> bool:
     if group == "core":
         if key == "SETPOINT_RAMP_RATE":
             return str(profile_mod.SETPOINT_TYPE).upper() == "RAMP"
+        return True
+
+    if group == "control":
         if key in ("DIST_MODE", "DIST_MAG_PCT", "DIST_START_S", "DIST_DURATION_S"):
             if not bool(profile_mod.DIST_ENABLE):
                 return False
@@ -270,15 +269,16 @@ def _is_param_visible_in_active_view(profile_mod, group: str, key: str) -> bool:
     return True
 
 
-def _print_group_params_view(profile_mod, group: str, include_advanced: bool = False, active_view: bool = False) -> None:
+def _print_group_params_view(profile_mod, group: str, include_advanced: bool = False, active_view: bool = False, leading_sep: bool = False) -> None:
     meta = _PARAM_GROUPS.get(group)
     if meta is None:
         print("# ERROR: unknown params group '%s'" % group)
         return
     title, items = meta
     shown = 0
-    print("# ========================================")
-    print("# INFO: params group %s - %s" % (group.upper(), title))
+    if leading_sep:
+        print("# ========================================")
+    print("# group: %s" % group.upper())
     for key, desc in items:
         if (not include_advanced) and (key in _ADVANCED_PARAM_KEYS):
             continue
@@ -286,7 +286,7 @@ def _print_group_params_view(profile_mod, group: str, include_advanced: bool = F
             continue
         if active_view and (not _is_param_visible_in_active_view(profile_mod, group, key)):
             continue
-        print("#   %-30s = %-28s  # %s" % (key, _format_param_value(getattr(profile_mod, key)), desc))
+        print("#   %-24s %-16s  # %s" % (key, _format_param_value(getattr(profile_mod, key)), desc))
         shown += 1
     if shown <= 0:
         print("#   (no active parameters in this group)")
@@ -295,10 +295,10 @@ def _print_group_params_view(profile_mod, group: str, include_advanced: bool = F
 def _print_command_catalog() -> None:
     print("# INFO:")
     print("# ========================================")
-    print("# commands:")
+    print("# command catalog")
     for syntax, desc in _COMMAND_SPECS:
         print("#   %-58s # %s" % (syntax, desc))
-    print("# during active run: stop, restart, help")
+    print("# scopes: active, all, core, control, safety, pid, onoff, fuzzy, mpc, tune, model")
     print("# ========================================")
 
 
@@ -308,50 +308,35 @@ def show_runtime_params(profile_mod, scope: str = "active") -> None:
         mode = str(profile_mod.CONTROL_MODE).upper()
         print("# RESULT:")
         print("# ========================================")
-        print("# parameter report (active)")
-        _print_group_params_view(profile_mod, "core", include_advanced=False, active_view=True)
-        _print_group_params_view(profile_mod, "safety", include_advanced=False, active_view=True)
-        _print_group_params_view(profile_mod, _MODE_TO_GROUP.get(mode, "pid"), include_advanced=False, active_view=True)
+        _print_group_params_view(profile_mod, "core", include_advanced=False, active_view=True, leading_sep=False)
+        _print_group_params_view(profile_mod, "control", include_advanced=False, active_view=True, leading_sep=True)
+        _print_group_params_view(profile_mod, "safety", include_advanced=False, active_view=True, leading_sep=True)
+        _print_group_params_view(profile_mod, _MODE_TO_GROUP.get(mode, "pid"), include_advanced=False, active_view=True, leading_sep=True)
     elif s in ("all", "*"):
         print("# RESULT:")
         print("# ========================================")
-        print("# parameter catalog (all)")
-        for g in ("core", "safety", "pid", "onoff", "fuzzy", "mpc", "tune", "model"):
-            _print_group_params_view(profile_mod, g, include_advanced=True, active_view=False)
+        first = True
+        for g in ("core", "control", "safety", "pid", "onoff", "fuzzy", "mpc", "tune", "model"):
+            _print_group_params_view(profile_mod, g, include_advanced=True, active_view=False, leading_sep=(not first))
+            first = False
     else:
         print("# RESULT:")
         print("# ========================================")
-        print("# parameter report (%s)" % s)
-        active_groups = ("core", "safety", "pid", "onoff", "fuzzy", "mpc")
         _print_group_params_view(
             profile_mod,
             s,
-            include_advanced=False,
-            active_view=(s in active_groups),
+            include_advanced=True,
+            active_view=False,
+            leading_sep=False,
         )
 
     print("# ========================================")
 
 
 def print_help(profile_mod, topic: str = "") -> None:
-    t = str(topic or "").strip().lower()
-    if t in ("", "commands", "cmd"):
-        _print_command_catalog()
-        print("# INFO: examples: params all, KP 6.5, TUNING_RULE CC_PID, pid report")
-        return
-    if t in ("settings", "groups", "params"):
-        print("# INFO:")
-        print("# ========================================")
-        print("# settings groups:")
-        print("#   %s" % ", ".join(_PARAM_GROUPS.keys()))
-        print("# use: params <group>   or   help <group>")
-        print("# note: params/group views show core teaching knobs; use 'params all' for advanced engineering options")
-        print("# ========================================")
-        return
-    if t in _PARAM_GROUPS:
-        _print_group_params_view(profile_mod, t, include_advanced=False, active_view=False)
-        return
-    print("# ERROR: unknown help topic '%s' (use: help settings)" % t)
+    _ = profile_mod
+    _ = topic
+    _print_command_catalog()
 
 
 def apply_runtime_param(profile_mod, name: str, raw_value: str) -> None:
@@ -407,7 +392,7 @@ def _fmt_pid_num(v, unit: str = "") -> str:
 
 
 def pid_report(profile_mod) -> None:
-    """Teaching-focused PID parameter report."""
+    """Interpreted PID summary."""
     try:
         from control import pid_descriptor_from_profile, pid_selection_from_profile
 
@@ -425,25 +410,53 @@ def pid_report(profile_mod) -> None:
     ideal = desc.get("ideal", {})
     pb = desc.get("forms", {}).get("PB", {})
 
-    print("# RESULT: PID parameter report")
+    print("# RESULT:")
+    print("# ========================================")
+    print("# PID summary")
     if variant == "PID":
-        print("#   family        : PID  (AW=%s)" % aw_type)
+        print("# variant: PID (AW=%s)" % aw_type)
     else:
-        print("#   family        : %s" % variant)
-    print("#   algorithm     : %s" % algorithm)
-    if algorithm == "PARALLEL":
-        print("#   configured (K): Kp=%s  Ki=%s  Kd=%s"
-              % (_fmt_pid_num(configured.get("KP")), _fmt_pid_num(configured.get("KI")), _fmt_pid_num(configured.get("KD"))))
-    else:
-        print("#   configured (IDEAL): Kc=%s  Ti=%s  Td=%s"
+        print("# variant: %s" % variant)
+    print("# algorithm: %s" % algorithm)
+
+    if variant == "2DOF":
+        print("# beta: %s" % _fmt_pid_num(getattr(profile_mod, "PID_BETA", None)))
+
+    if variant == "FF_PID":
+        print("# feedforward mode: %s" % _fmt_pid_num(getattr(profile_mod, "FF_MODE", None)))
+        print("# feedforward gain: %s" % _fmt_pid_num(getattr(profile_mod, "FF_GAIN_PCT_PER_C", None), "%/°C"))
+        print("# feedforward bias: %s" % _fmt_pid_num(getattr(profile_mod, "FF_BIAS_PCT", None), "%"))
+        print("# ambient reference: %s" % _fmt_pid_num(getattr(profile_mod, "FF_AMBIENT_C", None), "°C"))
+
+    if variant == "GAIN_SCHED":
+        gs_table = getattr(profile_mod, "GS_TABLE", None)
+        try:
+            gs_points = len(gs_table)
+        except Exception:
+            gs_points = None
+        print("# schedule variable: %s" % _fmt_pid_num(getattr(profile_mod, "GS_VARIABLE", None)))
+        if gs_points is None:
+            print("# gain schedule table: configured")
+        else:
+            print("# gain schedule table: %d points" % gs_points)
+
+    if variant == "SMITH_PI":
+        print("# model used: K=%s tau=%s theta=%s"
+              % (_fmt_pid_num(getattr(profile_mod, "MODEL_K", None)),
+                 _fmt_pid_num(getattr(profile_mod, "MODEL_TAU_S", None), "s"),
+                 _fmt_pid_num(getattr(profile_mod, "MODEL_THETA_S", None), "s")))
+
+    if algorithm == "SERIES":
+        print("# configured ideal gains: Kc=%s Ti=%s Td=%s"
               % (_fmt_pid_num(configured.get("KC")),
                  _fmt_pid_num(configured.get("TI_S"), "s"),
                  _fmt_pid_num(configured.get("TD_S"), "s")))
-    print("#   K view        : Kp=%s  Ki=%s  Kd=%s"
+
+    print("# active parallel gains: Kp=%s Ki=%s Kd=%s"
           % (_fmt_pid_num(p.get("KP")), _fmt_pid_num(p.get("KI")), _fmt_pid_num(p.get("KD"))))
-    print("#   IDEAL view    : Kc=%s  Ti=%s  Td=%s"
+    print("# equivalent ideal gains: Kc=%s Ti=%s Td=%s"
           % (_fmt_pid_num(ideal.get("KC")), _fmt_pid_num(ideal.get("TI_S"), "s"), _fmt_pid_num(ideal.get("TD_S"), "s")))
-    print("#   PB-equivalent : Pb=%s (span=%s)  Ti=%s  Td=%s"
+    print("# PB-equivalent gains: Pb=%s (span=%s) Ti=%s Td=%s"
           % (_fmt_pid_num(pb.get("PB"), "%"),
              _fmt_pid_num(pb.get("SPAN"), "°C"),
              _fmt_pid_num(pb.get("TI_S"), "s"),
@@ -451,7 +464,7 @@ def pid_report(profile_mod) -> None:
 
     if algorithm == "SERIES":
         eff = desc.get("effective_ideal", {})
-        print("#   SERIES eqv IDEAL: Kc_eff=%s  Ti_eff=%s  Td_eff=%s"
+        print("# series-equivalent ideal gains: Kc_eff=%s Ti_eff=%s Td_eff=%s"
               % (_fmt_pid_num(eff.get("KC")),
                  _fmt_pid_num(eff.get("TI_S"), "s"),
                  _fmt_pid_num(eff.get("TD_S"), "s")))
@@ -469,6 +482,7 @@ def pid_report(profile_mod) -> None:
                         print("# WARNING: SERIES with Td close to Ti can feel highly interacting; tune cautiously")
             except Exception:
                 pass
+    print("# ========================================")
 
 
 def wait_for_run_command(profile_mod) -> str:
@@ -498,7 +512,7 @@ def wait_for_run_command(profile_mod) -> str:
             except Exception as ex:
                 print("# ERROR: check failed: %s" % ex)
             continue
-        if cmd == "pid report":
+        if cmd == "pid":
             pid_report(profile_mod)
             continue
         if (cmd == "help") or cmd.startswith("help "):

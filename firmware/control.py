@@ -1720,7 +1720,7 @@ class SmithPredictorPI(ControllerBase):
 
 
 def _build_onoff(profile, emit_info=None):
-    _emit(emit_info, "# INFO: ON/OFF config: hyst=+/-%.2f°C  on=%.1f%%  min_switch=%.2fs"
+    _emit(emit_info, "# INFO: ON/OFF configuration: hyst=+/-%.2f°C  on=%.1f%%  min_switch=%.2fs"
           % (profile.ONOFF_HYST_C, profile.ONOFF_ON_PERCENT, profile.ONOFF_MIN_SWITCH_S))
     controller = TwoPositionPercent(
         hyst_c=profile.ONOFF_HYST_C,
@@ -1731,7 +1731,7 @@ def _build_onoff(profile, emit_info=None):
 
 
 def _build_fuzzy(profile, emit_info=None):
-    _emit(emit_info, "# INFO: FUZZY config: E_scale=%.3f°C  dE_scale=%.3f°C/s  du_rate_max=%.2f%%/s  de_alpha=%.2f"
+    _emit(emit_info, "# INFO: fuzzy configuration: E_scale=%.3f°C  dE_scale=%.3f°C/s  du_rate_max=%.2f%%/s  de_alpha=%.2f"
           % (profile.FUZZY_E_SCALE_C, profile.FUZZY_DE_SCALE_C_PER_S, profile.FUZZY_DU_RATE_MAX, profile.FUZZY_DE_FILTER_ALPHA))
     controller = FuzzySugenoIncrementalPercent(
         e_scale_c=profile.FUZZY_E_SCALE_C,
@@ -1753,7 +1753,7 @@ def _build_mpc(profile, emit_info=None):
     u0 = float(model["u0_pct"])
     y0 = float(model["y0"])
     runtime_y0 = False
-    _emit(emit_info, "# INFO: MPC(FOPDT): K=%.6f °C/%% tau=%.2fs theta=%.2fs u0=%.2f%% y0=%.2f L=%.2f"
+    _emit(emit_info, "# INFO: MPC model: K=%.6f °C/%% tau=%.2fs theta=%.2fs u0=%.2f%% y0=%.2f L=%.2f"
           % (K, tau, theta, u0, y0, float(profile.MPC_OBSERVER_GAIN)))
 
     horizon = int(profile.MPC_HORIZON_STEPS)
@@ -1812,9 +1812,9 @@ def _build_pid(profile, emit_info=None):
     pid_algo = pid_desc["algorithm"]
     use_ideal_form = pid_algo in ("IDEAL", "SERIES")
     if TI_S <= 0.0:
-        _emit(emit_info, "# INFO: PID params: Ti (TI_S)<=0 -> integral disabled (Ki=0)")
+        _emit(emit_info, "# INFO: PID parameters: Ti (TI_S)<=0 -> integral disabled (Ki=0)")
     if TD_S <= 0.0:
-        _emit(emit_info, "# INFO: PID params: Td (TD_S)<=0 -> derivative disabled (Kd=0)")
+        _emit(emit_info, "# INFO: PID parameters: Td (TD_S)<=0 -> derivative disabled (Kd=0)")
 
     if pid_variant == "SMITH_PI":
         model = _get_model()
@@ -1824,9 +1824,9 @@ def _build_pid(profile, emit_info=None):
             raise ValueError("SMITH_PI requires non-zero Kp from active runtime gains")
         if float(KI) <= 0.0:
             raise ValueError("SMITH_PI requires Ki>0 from active runtime gains (PI action)")
-        _emit(emit_info, "# INFO: SMITH_PI model: K=%.6f °C/%% tau=%.2fs theta=%.2fs"
+        _emit(emit_info, "# INFO: Smith PI model: K=%.6f °C/%% tau=%.2fs theta=%.2fs"
               % (model.get("K", 0.0), model.get("tau_s", 0.0), model.get("theta_s", 0.0)))
-        _emit(emit_info, "# INFO: SMITH_PI gains from runtime values: Kp=%.3f Ki=%.3f" % (KP, KI))
+        _emit(emit_info, "# INFO: Smith PI gains from runtime values: Kp=%.3f Ki=%.3f" % (KP, KI))
         controller = SmithPredictorPI(
             kp=KP,
             ki=KI,
@@ -1848,10 +1848,10 @@ def _build_pid(profile, emit_info=None):
 
             if pid_algo == "SERIES":
                 if aw_type == "BACKCALC":
-                    _emit(emit_info, "# INFO: PID(PID_AW_TYPE=BACKCALC/SERIES): Kc=%.3f Ti=%.3fs Td=%.3fs Tt=%.2fs (K_aw=%.3f 1/s)"
+                    _emit(emit_info, "# INFO: PID configuration (AW=BACKCALC, algorithm=SERIES): Kc=%.3f Ti=%.3fs Td=%.3fs Tt=%.2fs (K_aw=%.3f 1/s)"
                           % (KC, TI_S, TD_S, tt, k_aw))
                 else:
-                    _emit(emit_info, "# INFO: PID(PID_AW_TYPE=%s/SERIES): Kc=%.3f Ti=%.3fs Td=%.3fs" % (aw_type, KC, TI_S, TD_S))
+                    _emit(emit_info, "# INFO: PID configuration (AW=%s, algorithm=SERIES): Kc=%.3f Ti=%.3fs Td=%.3fs" % (aw_type, KC, TI_S, TD_S))
                 controller = PIDSeriesPercent(
                     kc=KC,
                     ti_s=TI_S,
@@ -1863,19 +1863,19 @@ def _build_pid(profile, emit_info=None):
                 )
             else:
                 if (aw_type == "NONE") and (profile.PID_INTEGRAL_LIMIT is not None):
-                    _emit(emit_info, "# WARNING: PID integral_limit is set with PID_AW_TYPE=NONE; windup demonstration may be masked")
+                    _emit(emit_info, "# WARNING: PID integral limit is set with PID_AW_TYPE=NONE; windup demonstration may be masked")
                 if aw_type == "BACKCALC":
                     if use_ideal_form:
-                        _emit(emit_info, "# INFO: PID(PID_AW_TYPE=BACKCALC/%s): Kc=%.3f Ti=%.3fs Td=%.3fs Tt=%.2fs (K_aw=%.3f 1/s)"
+                        _emit(emit_info, "# INFO: PID configuration (AW=BACKCALC, algorithm=%s): Kc=%.3f Ti=%.3fs Td=%.3fs Tt=%.2fs (K_aw=%.3f 1/s)"
                               % (pid_algo, KC, TI_S, TD_S, tt, k_aw))
                     else:
-                        _emit(emit_info, "# INFO: PID(PID_AW_TYPE=BACKCALC/%s): Kp=%.3f  Ki=%.3f  Kd=%.3f  Tt=%.2fs (K_aw=%.3f 1/s)"
+                        _emit(emit_info, "# INFO: PID configuration (AW=BACKCALC, algorithm=%s): Kp=%.3f Ki=%.3f Kd=%.3f Tt=%.2fs (K_aw=%.3f 1/s)"
                               % (pid_algo, KP, KI, KD, tt, k_aw))
                 else:
                     if use_ideal_form:
-                        _emit(emit_info, "# INFO: PID(PID_AW_TYPE=%s/%s): Kc=%.3f Ti=%.3fs Td=%.3fs" % (aw_type, pid_algo, KC, TI_S, TD_S))
+                        _emit(emit_info, "# INFO: PID configuration (AW=%s, algorithm=%s): Kc=%.3f Ti=%.3fs Td=%.3fs" % (aw_type, pid_algo, KC, TI_S, TD_S))
                     else:
-                        _emit(emit_info, "# INFO: PID(PID_AW_TYPE=%s/%s): Kp=%.3f  Ki=%.3f  Kd=%.3f" % (aw_type, pid_algo, KP, KI, KD))
+                        _emit(emit_info, "# INFO: PID configuration (AW=%s, algorithm=%s): Kp=%.3f Ki=%.3f Kd=%.3f" % (aw_type, pid_algo, KP, KI, KD))
                 controller = PIDParallelPercent(
                     kp=KP,
                     ki=KI,
@@ -1889,7 +1889,7 @@ def _build_pid(profile, emit_info=None):
             beta = float(profile.PID_BETA)
             if pid_algo != "PARALLEL":
                 raise ValueError("PID_VARIANT='2DOF' supports PID_ALGORITHM='PARALLEL' only")
-            _emit(emit_info, "# INFO: PID(2DOF): Kp=%.3f  Ki=%.3f  Kd=%.3f  beta=%.2f"
+            _emit(emit_info, "# INFO: PID 2DOF configuration: Kp=%.3f Ki=%.3f Kd=%.3f beta=%.2f"
                   % (KP, KI, KD, beta))
             controller = PID2DOFPercent(
                 kp=KP, ki=KI, kd=KD, beta=beta,
@@ -1911,7 +1911,7 @@ def _build_pid(profile, emit_info=None):
                 u0_ff = float(model.get("u0_pct", 0.0))
                 if ambient is None:
                     ambient = model.get("y0", None)
-            _emit(emit_info, "# INFO: PID(FF_PID): Kp=%.3f Ki=%.3f Kd=%.3f  FF_MODE=%s" % (KP, KI, KD, ff_mode))
+            _emit(emit_info, "# INFO: PID feedforward configuration: Kp=%.3f Ki=%.3f Kd=%.3f FF_MODE=%s" % (KP, KI, KD, ff_mode))
             controller = PIDFeedForwardPercent(
                 kp=KP, ki=KI, kd=KD,
                 ff_mode=ff_mode,
@@ -1924,7 +1924,7 @@ def _build_pid(profile, emit_info=None):
                 integral_limit=profile.PID_INTEGRAL_LIMIT,
             )
         elif pid_variant == "GAIN_SCHED":
-            _emit(emit_info, "# INFO: PID(GAIN_SCHED): variable=%s  breakpoints=%d"
+            _emit(emit_info, "# INFO: PID gain-schedule configuration: variable=%s breakpoints=%d"
                   % (profile.GS_VARIABLE, len(profile.GS_TABLE)))
             controller = GainScheduledPIDPercent(
                 schedule_table=profile.GS_TABLE,

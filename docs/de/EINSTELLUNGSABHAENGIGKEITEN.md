@@ -9,7 +9,7 @@ Für Begriffe siehe:
 
 - Laufzeitparameter werden direkt in Firmware angewendet.
 - Der aktive Regelpfad wird durch `CONTROL_MODE` und (bei PID) durch `PID_VARIANT` bestimmt.
-- `TUNING_RULE` wählt die Tuning-Familie (modellbasiert oder relaybasiert).
+- `TUNING_METHOD` wählt die Tuning-Familie (modellbasiert oder relaybasiert).
 
 ## CONTROL_MODE
 
@@ -33,7 +33,7 @@ Für Begriffe siehe:
 - `PARALLEL` nutzt primär `KP`, `KI`, `KD`
 - `IDEAL`/`SERIES` nutzen primär `KC`, `TI_S`, `TD_S`
 
-### TUNING_RULE
+### TUNING_METHOD
 
 Modellbasiert:
 - `ZN1_P`, `ZN1_PI`, `ZN1_PID`

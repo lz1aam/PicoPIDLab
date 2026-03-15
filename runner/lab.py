@@ -61,15 +61,15 @@ FOPDT_Y1_RE = re.compile(r"final steady temperature y1=([0-9.eE+-]+)", re.IGNORE
 FOPDT_METHOD_RE = re.compile(r"applied method=([A-Za-z0-9_]+)", re.IGNORECASE)
 TUNING_GAINS_RE = re.compile(r"TUNING: runtime gains updated -> Kp=([0-9.eE+-]+)\s+Ki=([0-9.eE+-]+)\s+Kd=([0-9.eE+-]+)")
 TUNING_PARALLEL_FORM_RE = re.compile(
-    r"Applied PARALLEL form:\s*Kp=([^\s]+)\s+Ki=([^\s]+)\s+Kd=([^\s]+)",
+    r"(?:Applied PARALLEL form|applied parallel gains):\s*Kp=([^\s]+)\s+Ki=([^\s]+)\s+Kd=([^\s]+)",
     re.IGNORECASE,
 )
 TUNING_RELAY_METRICS_RE = re.compile(
     r"relay metrics:\s*A=([0-9.eE+-]+).*d_eff=([0-9.eE+-]+).*Ku=([0-9.eE+-]+)\s+Pu=([0-9.eE+-]+)\s*s\s+PV_pp=([0-9.eE+-]+)",
     re.IGNORECASE,
 )
-TUNING_CYCLES_RE = re.compile(r"cycles_used=([0-9]+)", re.IGNORECASE)
-TUNING_APPLIED_SET_RE = re.compile(r"Applied set:\s*(.+)$", re.IGNORECASE)
+TUNING_CYCLES_RE = re.compile(r"cycles(?:_used| used)=([0-9]+)", re.IGNORECASE)
+TUNING_APPLIED_METHOD_RE = re.compile(r"tuning method:\s*(.+)$", re.IGNORECASE)
 _TELEM_MAIN_RE = re.compile(r"\bPV:\s*([0-9.eE+-]+)\s+SP:\s*([0-9.eE+-]+)\s+OP:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
 _TELEM_YH_RE = re.compile(r"\bYH:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
 _TELEM_YP_RE = re.compile(r"\bYP:\s*([0-9.eE+-]+)\b", re.IGNORECASE)
@@ -83,10 +83,6 @@ CHECK_ERR_TOKENS = ("# ERROR: check failed:",)
 ASSIGN_OK_TOKEN = "# RESULT: "
 ASSIGN_ERR_TOKENS = ("# ERROR: assign failed:", "# ERROR:")
 UNKNOWN_CMD_TOKENS = ("# ERROR: unknown command",)
-
-# TODO(runner):
-# - Add firmware/runner schema preflight check (fail early with actionable diff
-#   when an experiment parameter is unsupported by current firmware build).
 
 MODEL_K_C_PER_PCT = 0.467
 COLLECT_LOOP_SLEEP_IDLE_S = 0.02
@@ -1283,11 +1279,11 @@ def safe_apply_params(session: PicoSession, params: Dict[str, object], timeout_s
     order1 = ["CONTROL_MODE"]
     order2 = ["TS_S", "EXPERIMENT_RUN_S", "SETPOINT_TYPE", "SETPOINT_C", "SETPOINT_RAMP_RATE"]
     order3 = [
-        # Apply tuning dependency chain before variant selection to avoid rollback.
-        "TUNING_RULE",
+        # Apply algorithm before variant because firmware validates after each assignment.
+        "TUNING_METHOD",
+        "PID_ALGORITHM",
         "PID_VARIANT",
         "PID_AW_TYPE",
-        "PID_ALGORITHM",
     ]
     sent_keys = []
 
@@ -1704,7 +1700,7 @@ def parse_tuning_summary(raw_lines: Sequence[str]) -> Optional[Dict[str, object]
             out["cycles_used"] = int(m.group(1))
             break
     for line in raw_lines:
-        m = TUNING_APPLIED_SET_RE.search(line)
+        m = TUNING_APPLIED_METHOD_RE.search(line)
         if m:
             out["applied_set"] = str(m.group(1)).strip()
             break

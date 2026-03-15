@@ -44,8 +44,8 @@ This glossary defines abbreviations used across firmware, terminal output, and d
 
 ## Tuning Rules
 
-- `ZN` - Ziegler-Nichols tuning rule
-- `TL` - Tyreus-Luyben tuning rule
+- `ZN` - Ziegler-Nichols tuning method
+- `TL` - Tyreus-Luyben tuning method
 - `Ku` - Ultimate gain (critical gain from relay/oscillation test)
 - `Pu` - Ultimate period (oscillation period at ultimate gain)
 

@@ -1,6 +1,6 @@
 # Inicio rápido
 
-Versión objetivo: **v1.2.8**
+Versión objetivo: **v1.2.9**
 
 Este documento cubre los dos flujos soportados:
 - **Flujo Thonny** (terminal de firmware directo)
@@ -53,7 +53,7 @@ Ejemplos:
 
 ```text
 SETPOINT_C 45
-TUNING_RULE CC_PID
+TUNING_METHOD CC_PID
 PID_ALGORITHM PARALLEL
 ```
 

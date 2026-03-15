@@ -33,7 +33,7 @@ Use esta checklist en hardware real después de cargar el firmware.
 
 1. Configurar:
    - `CONTROL_MODE PID`
-   - `TUNING_RULE ZN2_PID`
+   - `TUNING_METHOD ZN2_PID`
    - `PID_VARIANT PID`
    - `PID_AW_TYPE CLAMP`
    - `PID_ALGORITHM PARALLEL`

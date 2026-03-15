@@ -1,6 +1,6 @@
 # PicoPID Lab (MicroPython, RP2040)
 
-Current version: **v1.2.8** (2026-03-14)
+Current version: **v1.2.9** (2026-03-15)
 
 PicoPID Lab is an open-source educational platform for university control-systems courses.  
 Students experiment with ON/OFF, PID, Fuzzy, and MPC algorithms on real hardware (RP2040-based thermal plant), then compare controller performance through telemetry, metrics, and plots.
@@ -66,7 +66,7 @@ At firmware prompt (`lab>`), typical commands:
 - `status`
 - `params`, `params <group>`, `params all`
 - `check`
-- `pid report`
+- `pid`
 - `<PARAM> <VALUE>` or `<PARAM>=<VALUE>`
 - `control`, `tune`, `model`, `monitor`
 - during active run: `stop`, `restart`, `help`
@@ -83,7 +83,7 @@ Set in `firmware/config.py`:
 For PID family:
 - `PID_VARIANT`: `PID`, `2DOF`, `FF_PID`, `GAIN_SCHED`, `SMITH_PI`
 - `PID_ALGORITHM`: `PARALLEL`, `IDEAL`, `SERIES`
-- `TUNING_RULE`:
+- `TUNING_METHOD`:
   - model-based: `ZN1_*`, `CC_*`
   - relay-based: `ZN2_*`, `TL_*`
 

@@ -42,7 +42,7 @@ These apply in all modes:
 - Active gain form is selected automatically by `PID_ALGORITHM`:
   - `PARALLEL` -> active settings: `KP`, `KI`, `KD`
   - `IDEAL` or `SERIES` -> active settings: `KC`, `TI_S`, `TD_S`
-  - `PB` is a reported equivalent view for comparison (`pid report`)
+  - `PB` is a reported equivalent view for comparison (`pid`)
 
 ### 3.2 Shared PID shaping
 
@@ -70,14 +70,14 @@ These apply in all modes:
 
 Only active when `CONTROL_MODE="PID"` and `tune` command is executed.
 
-- `TUNING_RULE` in relay family (`ZN2_*`, `TL_*`):
+- `TUNING_METHOD` in relay family (`ZN2_*`, `TL_*`):
   - `tune` command runs relay tuning instead of control tracking
   - performs relay test (`Ku`, `Pu`)
-  - valid `TUNING_RULE` values:
+  - valid `TUNING_METHOD` values:
     - `ZN2_P`, `ZN2_PI`, `ZN2_PID`
     - `TL_P`, `TL_PI`, `TL_PID`
   - selected gains are written to active runtime values (`KP/KI/KD` and derived `KC/TI_S/TD_S`)
-- `TUNING_RULE` in model family (`ZN1_*`, `CC_*`):
+- `TUNING_METHOD` in model family (`ZN1_*`, `CC_*`):
   - `tune` command runs model-based tuning using active FOPDT model values (`MODEL_*`)
   - valid rule namespace:
     - `ZN1_P`, `ZN1_PI`, `ZN1_PID`
@@ -144,4 +144,4 @@ Active when `model` command is executed:
 - `params all` (full catalog)
 - `params pid` (PID-only view)
 - `check` (validate current runtime config)
-- `pid report` (teaching report with algorithm/input/mode info)
+- `pid` (teaching report with algorithm/input/mode info)

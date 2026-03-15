@@ -18,7 +18,7 @@ from hardware import NTCLG100E2103JB, Heater, StatusRGB, yield_cpu, advance_dead
 import config as P
 from cli import wait_for_run_command, poll_command_nonblocking
 
-_FIRMWARE_VERSION = "1.2.8"
+_FIRMWARE_VERSION = "1.2.9"
 
 def _isfinite(x) -> bool:
     try:
@@ -27,19 +27,19 @@ def _isfinite(x) -> bool:
         return False
 
 
-def _tuning_rule_label(code: str) -> str:
-    rule = str(code).upper()
-    if rule.startswith("ZN1_"):
+def _tuning_method_label(code: str) -> str:
+    method = str(code).upper()
+    if method.startswith("ZN1_"):
         family = "Ziegler-Nichols 1"
-    elif rule.startswith("ZN2_"):
+    elif method.startswith("ZN2_"):
         family = "Ziegler-Nichols 2"
-    elif rule.startswith("CC_"):
+    elif method.startswith("CC_"):
         family = "Cohen-Coon"
-    elif rule.startswith("TL_"):
+    elif method.startswith("TL_"):
         family = "Tyreus-Luyben"
     else:
         return str(code)
-    mode = rule.split("_", 1)[-1]
+    mode = method.split("_", 1)[-1]
     return "%s (%s)" % (family, mode)
 
 
@@ -62,7 +62,7 @@ def _snapshot_header_config(profile_mod):
         "exp_timer_enabled": (exp_run_s is not None) and (float(exp_run_s) > 0.0),
         "setpoint_c_text": str(profile_mod.SETPOINT_C),
         "ramp_rate": float(profile_mod.SETPOINT_RAMP_RATE),
-        "pid_rule": str(profile_mod.TUNING_RULE).upper(),
+        "pid_method": str(profile_mod.TUNING_METHOD).upper(),
         "pid_variant": str(profile_mod.PID_VARIANT).upper(),
         "pid_aw_type": str(profile_mod.PID_AW_TYPE).upper(),
         "pid_algorithm": str(profile_mod.PID_ALGORITHM).upper(),
@@ -235,7 +235,7 @@ def _collect_banner_lines(cfg):
     )
 
     if control_mode == "PID":
-        lines.append("tuning rule: %s" % _tuning_rule_label(cfg["pid_rule"]))
+        lines.append("tuning method: %s" % _tuning_method_label(cfg["pid_method"]))
     lines.extend(_mode_banner_lines_from_snapshot(cfg, telemetry_mode))
     return lines
 
@@ -274,7 +274,7 @@ def _mode_banner_lines_from_snapshot(cfg, telemetry_mode: str):
 
         if algorithm == "PARALLEL":
             lines.append(
-                "PID configured params: Kp=%.4g Ki=%.4g Kd=%.4g"
+                "configured PID gains: Kp=%.4g Ki=%.4g Kd=%.4g"
                 % (
                     float(cfg["kp"]),
                     float(cfg["ki"]),
@@ -283,7 +283,7 @@ def _mode_banner_lines_from_snapshot(cfg, telemetry_mode: str):
             )
         else:
             lines.append(
-                "PID configured params: Kc=%.4g Ti=%.4gs Td=%.4gs"
+                "configured PID gains: Kc=%.4g Ti=%.4gs Td=%.4gs"
                 % (
                     float(cfg["kc"]),
                     float(cfg["ti_s"]),
@@ -307,7 +307,7 @@ def _mode_banner_lines_from_snapshot(cfg, telemetry_mode: str):
 
     if control_mode == "MPC":
         lines.append(
-            "MPC config: horizon=%d  grid_step=%.1f%%  du_max=%.1f%%  lambda=%.3f"
+            "MPC configuration: horizon=%d  grid_step=%.1f%%  du_max=%.1f%%  lambda=%.3f"
             % (
                 int(cfg["mpc_horizon_steps"]),
                 float(cfg["mpc_grid_step_pct"]),
@@ -498,10 +498,10 @@ def _run_pid_relay_tuning(sensor, heater, indicator, cfg, run_state):
     def _telemetry_cb(pv_c, sp_c, op_pct):
         _emit_telemetry_line(pv_c, sp_c, op_pct, telemetry_mode, "PID")
 
-    abort_cb = _make_run_abort_cb("TUNING", run_state)
+    abort_cb = _make_run_abort_cb("tuning run", run_state)
     overtemp_cb = _make_overtemp_cb(cfg["cutoff_c"])
     success = False
-    print("# PHASE: TUNING run starting")
+    print("# PHASE: tuning run starting")
     gains = run_relay_tuning(
         sensor,
         heater,
@@ -529,16 +529,16 @@ def _run_pid_relay_tuning(sensor, heater, indicator, cfg, run_state):
 def _run_pid_model_tuning(heater, indicator):
     from identify import load_effective_model, run_model_tuning
 
-    print("# PHASE: TUNING model")
+    print("# PHASE: tuning model")
     model = load_effective_model(P)
     if model is None:
-        print("# ERROR: TUNING model requires MODEL_* values")
+        print("# ERROR: tuning model requires MODEL_* values")
         _shutdown_outputs(heater, indicator)
         return False
     try:
         KP, KI, KD = run_model_tuning(P, model)
     except Exception as ex:
-        print("# ERROR: TUNING model failed: %s" % ex)
+        print("# ERROR: tuning model failed: %s" % ex)
         _shutdown_outputs(heater, indicator)
         return False
 
@@ -766,21 +766,21 @@ while True:
             print("# ERROR: tune validation failed: %s" % ex)
             continue
         run_state = _new_run_state()
-        rule = str(P.TUNING_RULE).upper()
-        if rule in P.RELAY_TUNING_RULES:
+        rule = str(P.TUNING_METHOD).upper()
+        if rule in P.RELAY_TUNING_METHODS:
             try:
                 _run_pid_relay_tuning(sensor, heater, indicator, _snapshot_relay_tuning_config(), run_state)
             except Exception as ex:
                 _shutdown_outputs(heater, indicator)
                 print("# ERROR: tune run failed: %s" % ex)
-        elif rule in P.MODEL_TUNING_RULES:
+        elif rule in P.MODEL_TUNING_METHODS:
             try:
                 _run_pid_model_tuning(heater, indicator)
             except Exception as ex:
                 _shutdown_outputs(heater, indicator)
                 print("# ERROR: tune run failed: %s" % ex)
         else:
-            print("# ERROR: internal tune dispatch error (unexpected TUNING_RULE=%s)" % rule)
+            print("# ERROR: internal tune dispatch error (unexpected TUNING_METHOD=%s)" % rule)
         continue
     if action != "control":
         print("# ERROR: unknown run action: %s" % str(action))

@@ -15,7 +15,7 @@
 - `PARALLEL` -> utilise `KP`, `KI`, `KD`
 - `IDEAL`/`SERIES` -> utilise `KC`, `TI_S`, `TD_S`
 
-### TUNING_RULE
+### TUNING_METHOD
 
 Basé modèle:
 - `ZN1_*`, `CC_*`

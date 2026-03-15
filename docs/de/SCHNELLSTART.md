@@ -1,6 +1,6 @@
 # Schnellstart
 
-Zielversion: **v1.2.8**
+Zielversion: **v1.2.9**
 
 Dieses Dokument deckt beide unterstützten Workflows ab:
 - **Thonny-Workflow** (direktes Firmware-Terminal)
@@ -53,7 +53,7 @@ Beispiele:
 
 ```text
 SETPOINT_C 45
-TUNING_RULE CC_PID
+TUNING_METHOD CC_PID
 PID_ALGORITHM PARALLEL
 ```
 

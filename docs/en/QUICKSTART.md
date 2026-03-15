@@ -1,6 +1,6 @@
 # Quick Start
 
-Version target: **v1.2.8** (2026-03-14)
+Version target: **v1.2.9** (2026-03-15)
 
 This guide covers both supported workflows:
 - **Thonny workflow** (direct firmware terminal)
@@ -58,7 +58,7 @@ Typical command sequence:
 3. `params` / `params pid` / `params model` / `params tune`
 4. run command:
    - `control` (closed-loop control)
-   - `tune` (parameter tuning from selected `TUNING_RULE`)
+   - `tune` (parameter tuning from selected `TUNING_METHOD`)
    - `model` (FOPDT identification)
    - `monitor` (passive monitoring, heater OFF)
 5. during active run: `stop`
@@ -71,7 +71,7 @@ Examples:
 
 ```text
 SETPOINT_C 45
-TUNING_RULE CC_PID
+TUNING_METHOD CC_PID
 PID_ALGORITHM PARALLEL
 ```
 
@@ -154,7 +154,7 @@ Completion token used by host synchronization:
 ## 6. Recommended Student Flow
 
 1. `model` to identify/update FOPDT model (`MODEL_*` in RAM)
-2. `tune` with selected `TUNING_RULE` (model-based or relay-based)
+2. `tune` with selected `TUNING_METHOD` (model-based or relay-based)
 3. `control` with updated gains
 4. Compare PV/SP/OP trends and saved metrics
 

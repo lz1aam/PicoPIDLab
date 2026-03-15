@@ -126,7 +126,7 @@ metrics:
 # Recommended valid recipe combinations:
 # - ONOFF/PID/FUZZY/MPC tracking labs: kind=standard + EXPERIMENT_RUN_S in params
 # - FOPDT identification: kind=fopdt
-# - PID relay tuning: kind=tuning + CONTROL_MODE=PID + relay-family TUNING_RULE (ZN2_*/TL_*)
+# - PID relay tuning: kind=tuning + CONTROL_MODE=PID + relay-family TUNING_METHOD (ZN2_*/TL_*)
 # - parameter sweep: kind=sweep + sweep.grid
 #
 # Telemetry verbosity in firmware (optional per recipe via params):
@@ -181,7 +181,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -218,7 +218,7 @@ experiments:
       TELEMETRY_MODE: NORMAL
       PID_VARIANT: PID
       PID_AW_TYPE: CLAMP
-      TUNING_RULE: ZN2_PID
+      TUNING_METHOD: ZN2_PID
       TUNING_TARGET_C: 50.0
       TUNING_BAND_C: 1.0
       TUNING_CYCLES: 5
@@ -235,7 +235,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 45.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -260,7 +260,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 45.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -285,7 +285,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -310,7 +310,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -336,7 +336,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 45.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -378,7 +378,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -401,7 +401,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -419,7 +419,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -445,7 +445,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -471,7 +471,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: true
+      DIST_ENABLE: false
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0

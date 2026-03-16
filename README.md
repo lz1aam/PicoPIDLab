@@ -121,7 +121,7 @@ Feedforward PID combines the feedback loop with a compensating term and shows sm
 
 The fuzzy controller reaches the target with a different output profile, showing that the platform is not limited to classical linear control laws.
 
-#### Smith-predictor PI
+#### Smith-predictor PI control
 
 ![Smith PI step tracking plot](docs/examples/smith-pi-step.png)
 

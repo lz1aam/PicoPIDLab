@@ -85,7 +85,7 @@ Simple bang-bang control is easy to understand and visibly cycles around the tar
 
 Pure proportional control reaches the target quickly but leaves a visible offset and weaker disturbance rejection than PI or PID.
 
-#### PI control
+#### PI control with disturbance rejection
 
 ![PI step tracking plot](docs/examples/pid-pi-step.png)
 

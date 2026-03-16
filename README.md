@@ -73,7 +73,7 @@ Model-based tuning gives a more conservative loop. Positive gain and phase margi
 
 ### Controller capability examples
 
-#### ON/OFF baseline
+#### ON/OFF control
 
 ![ON/OFF step tracking plot](docs/examples/onoff-step.png)
 

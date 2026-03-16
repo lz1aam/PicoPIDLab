@@ -115,7 +115,7 @@ Two-degree-of-freedom PID separates setpoint weighting from disturbance rejectio
 
 Feedforward PID combines the feedback loop with a compensating term and shows smooth setpoint tracking with reduced control effort.
 
-#### Fuzzy control
+#### Fuzzy Logic control
 
 ![Fuzzy step tracking plot](docs/examples/fuzzy-step.png)
 

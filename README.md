@@ -79,7 +79,7 @@ Model-based tuning gives a more conservative loop. Positive gain and phase margi
 
 Simple bang-bang control is easy to understand and visibly cycles around the target. It is a useful baseline for comparing more advanced regulators.
 
-#### P-only control
+#### P-only control with disturbance rejection
 
 ![P-only step tracking plot](docs/examples/pid-p-step.png)
 

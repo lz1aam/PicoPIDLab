@@ -97,7 +97,7 @@ PI control removes the steady-state offset and gives a cleaner thermal response 
 
 Parallel PID reduces oscillation and recovers after a disturbance with smoother heater action than ON/OFF control.
 
-#### Ideal PID with ramp setpoint
+#### Ideal PID control with ramp setpoint
 
 ![Ideal PID ramp tracking plot](docs/examples/pid-ideal-ramp.png)
 

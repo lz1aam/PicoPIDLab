@@ -133,6 +133,12 @@ Smith-predictor PI uses the identified model to compensate dead time and improve
 
 Gain scheduling demonstrates that the device can vary controller aggressiveness across the operating region instead of relying on one fixed PID setting.
 
+#### MPC
+
+![MPC tracking plot](docs/examples/mpc-tracking.png)
+
+MPC uses the internal process model to optimize future heater moves under constraints while exposing `YH` and `YP` for prediction-aware teaching demos.
+
 Students primarily edit one file:
 - `firmware/config.py`
 

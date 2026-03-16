@@ -91,7 +91,7 @@ Pure proportional control reaches the target quickly but leaves a visible offset
 
 PI control removes the steady-state offset and gives a cleaner thermal response than P-only control while staying simpler than full PID.
 
-#### Parallel PID with disturbance rejection
+#### Parallel PID control with disturbance rejection
 
 ![Parallel PID step tracking plot](docs/examples/pid-parallel-step.png)
 

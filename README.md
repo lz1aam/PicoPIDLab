@@ -133,7 +133,7 @@ Smith-predictor PI uses the identified model to compensate dead time and improve
 
 Gain scheduling demonstrates that the device can vary controller aggressiveness across the operating region instead of relying on one fixed PID setting.
 
-#### MPC
+#### Model predictive control
 
 ![MPC tracking plot](docs/examples/mpc-tracking.png)
 

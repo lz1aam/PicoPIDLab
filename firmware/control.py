@@ -128,8 +128,8 @@ _PID_ZERO_EPS = 1e-12
 _DELAY_DT_EPS = 1e-9
 
 
-def pid_forms_from_gains(kp: float, ki: float, kd: float, span: float):
-    """Return K/IDEAL/PB equivalent forms derived from internal gains."""
+def parallel_to_ideal_terms(kp: float, ki: float, kd: float):
+    """Return (Kc, Ti_s, Td_s) from parallel gains using scalar math only."""
     kp = float(kp)
     ki = float(ki)
     kd = float(kd)
@@ -143,6 +143,15 @@ def pid_forms_from_gains(kp: float, ki: float, kd: float, span: float):
         td_s = kd / kp
     elif kd == 0.0:
         td_s = 0.0
+    return kp, ti_s, td_s
+
+
+def pid_forms_from_gains(kp: float, ki: float, kd: float, span: float):
+    """Return K/IDEAL/PB equivalent forms derived from internal gains."""
+    kp = float(kp)
+    ki = float(ki)
+    kd = float(kd)
+    _kc, ti_s, td_s = parallel_to_ideal_terms(kp, ki, kd)
 
     span_val = float(span)
     if span_val <= 0.0:
@@ -232,14 +241,20 @@ def pid_selection_from_profile(profile):
 
 def series_configured_from_ideal(kc_eff: float, ti_eff_s, td_eff_s):
     """Return SERIES-configured parameters matching an effective IDEAL set."""
+    kc, ti_s, td_s = series_configured_from_ideal_terms(kc_eff, ti_eff_s, td_eff_s)
+    return {"KC": kc, "TI_S": ti_s, "TD_S": td_s if td_s > 0.0 else 0.0}
+
+
+def series_configured_from_ideal_terms(kc_eff: float, ti_eff_s, td_eff_s):
+    """Return SERIES-configured (KC, TI_S, TD_S) matching an effective ideal set."""
     kc_eff = float(kc_eff)
     ti_eff = 0.0 if ti_eff_s is None else float(ti_eff_s)
     td_eff = 0.0 if td_eff_s is None else float(td_eff_s)
 
     if ti_eff <= 0.0:
-        return {"KC": kc_eff, "TI_S": 0.0, "TD_S": td_eff if td_eff > 0.0 else 0.0}
+        return kc_eff, 0.0, td_eff if td_eff > 0.0 else 0.0
     if td_eff <= 0.0:
-        return {"KC": kc_eff, "TI_S": ti_eff, "TD_S": 0.0}
+        return kc_eff, ti_eff, 0.0
 
     discriminant = (ti_eff * ti_eff) - (4.0 * ti_eff * td_eff)
     if discriminant < -_PID_ZERO_EPS:
@@ -254,7 +269,7 @@ def series_configured_from_ideal(kc_eff: float, ti_eff_s, td_eff_s):
     if ti_s <= 0.0:
         raise ValueError("effective IDEAL gains produced invalid SERIES Ti")
     kc = kc_eff * (ti_s / ti_eff)
-    return {"KC": kc, "TI_S": ti_s, "TD_S": td_s if td_s > 0.0 else 0.0}
+    return kc, ti_s, td_s
 
 
 def _resolve_fopdt_model(profile):

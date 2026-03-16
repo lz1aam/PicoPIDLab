@@ -34,6 +34,37 @@ For each formula: equation, symbols/units, source, and code location.
   - `firmware/main.py::_disturbance_is_active`
   - `firmware/main.py` control loop OP apply path
 
+## Frequency-Domain Stability Margins
+
+### Open-loop Bode margins used by the runner after PID tuning
+- Equation:
+  - Open-loop transfer for the plotted tune-side Bode analysis:
+    - `L(s) = C(s)G(s)`
+  - Gain-crossover frequencies `w_gc` satisfy:
+    - `|L(j*w_gc)| = 1` (equivalently `0 dB`)
+  - Phase margin at each gain crossover:
+    - `PM = 180 deg + angle(L(j*w_gc))`
+  - Phase-crossover frequencies `w_pc` satisfy:
+    - `angle(L(j*w_pc)) = -180 deg (mod 360 deg)`
+  - Gain margin at each phase crossover:
+    - `GM = 1/|L(j*w_pc)|`
+    - `GM_dB = -20*log10(|L(j*w_pc)|)`
+  - If multiple crossover frequencies exist:
+    - report the phase margin at the first gain crossover
+    - report the gain margin at the first phase crossover
+- Notes:
+  - Negative `PM` or `GM_dB` indicates the loop has crossed the classical stability boundary.
+  - The runner computes these margins from the continuous-time FOPDT loop used for the tune-side analysis plot.
+- Source:
+  - K. J. Astrom, R. M. Murray, *Feedback Systems: An Introduction for Scientists and Engineers*, Princeton University Press, 2008. Frequency-domain stability margin definitions.
+  - MathWorks Control System Toolbox documentation:
+    - `margin`: https://www.mathworks.com/help/control/ref/dynamicsystem.margin.html
+    - `allmargin`: https://www.mathworks.com/help/control/ref/dynamicsystem.allmargin.html
+- Code:
+  - `runner/lab.py::_estimate_margin_info`
+  - `runner/lab.py::_pid_loop_freq_response`
+  - `runner/lab.py::_save_frequency_bode_plot`
+
 ## PID Family
 
 ### Parallel PID with derivative on measurement

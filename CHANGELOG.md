@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [1.2.10] - 2026-03-16
+
+### Added
+- Added a stable hidden firmware `snapshot` command for host-side runtime parameter reads.
+- Added tune-side open-loop Bode analysis in the runner using the active FOPDT model and active PID settings.
+
+### Changed
+- The runner now reads runtime model/PID state from the stable snapshot path instead of scraping formatted `params all` output.
+- Tune-side Bode analysis is limited to fixed PID-family variants and uses textbook two-panel Bode layout with classroom-style first-crossover PM/GM reporting.
+- Added extra post-tune `gc.collect()` protection in both relay and model tuning apply paths to reduce RP2040 heap-pressure risk.
+- Centralized scalar PID conversion helpers in `firmware/control.py` to remove drift between tune/apply/report paths without adding a new firmware module.
+- Default relay tuning recipe in `runner/lab.yaml` now uses `CC_PID`.
+- Bumped firmware version to `1.2.10`.
+
 ## [1.2.9] - 2026-03-15
 
 ### Changed

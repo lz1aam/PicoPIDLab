@@ -1,6 +1,6 @@
 # Démarrage rapide
 
-Version cible: **v1.2.9**
+Version cible: **v1.2.10**
 
 Workflows:
 - Thonny (terminal firmware direct)

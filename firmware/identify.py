@@ -294,26 +294,6 @@ def load_effective_model(profile=None):
     return get_model_values(profile)
 
 
-def _pid_views(kp: float, ki: float, kd: float, span: float):
-    kp = float(kp)
-    ki = float(ki)
-    kd = float(kd)
-
-    ti_s = None
-    if ki > 0.0 and abs(kp) > _CROSSING_INTERP_EPS:
-        ti_s = kp / ki
-    td_s = None
-    if abs(kp) > _CROSSING_INTERP_EPS:
-        td_s = kd / kp
-    elif kd == 0.0:
-        td_s = 0.0
-    span_val = float(span)
-    if span_val <= 0.0:
-        raise ValueError("SPAN must be > 0")
-    pb_pct = None if kp <= 0.0 else (10000.0 / (kp * span_val))
-    return {"KP": kp, "KI": ki, "KD": kd, "TI_S": ti_s, "TD_S": td_s, "PB": pb_pct, "SPAN": span_val}
-
-
 def _fmt_opt(v, unit: str = ""):
     if v is None:
         return "disabled"
@@ -391,8 +371,8 @@ def run_model_tuning(cfg, model):
     KD = float(base_set["KD"])
     if (not math.isfinite(KP)) or (not math.isfinite(KI)) or (not math.isfinite(KD)):
         raise ValueError("TUNING model produced non-finite gains")
-    pb_span = float(cfg.SPAN)
-    applied = _pid_views(KP, KI, KD, pb_span)
+    from control import parallel_to_ideal_terms
+    Kc, Ti_s, Td_s = parallel_to_ideal_terms(KP, KI, KD)
 
     print("# RESULT:")
     print("# ========================================")
@@ -400,26 +380,11 @@ def run_model_tuning(cfg, model):
     print("# model used: K=%.6f °C/%% tau=%.2f s theta=%.2f s" % (K, tau, theta))
     print("# tuning method: %s" % tuning_method_label(selected_rule))
     print("# applied parallel gains: Kp=%s Ki=%s Kd=%s"
-          % (_fmt_opt(applied["KP"]), _fmt_opt(applied["KI"]), _fmt_opt(applied["KD"])))
+          % (_fmt_opt(KP), _fmt_opt(KI), _fmt_opt(KD)))
     print("# applied ideal gains: Kc=%s Ti=%s Td=%s"
-          % (_fmt_opt(applied["KP"]), _fmt_opt(applied["TI_S"], "s"), _fmt_opt(applied["TD_S"], "s")))
+          % (_fmt_opt(Kc), _fmt_opt(Ti_s, "s"), _fmt_opt(Td_s, "s")))
     print("# ========================================")
     return KP, KI, KD
-
-
-def _rule_terms(base_set: dict, mode: str):
-    m = str(mode).upper()
-    kp = float(base_set["KP"])
-    ki = float(base_set["KI"])
-    kd = float(base_set["KD"])
-    if m == "P":
-        return {"KP": kp, "KI": 0.0, "KD": 0.0}
-    if m == "PI":
-        return {"KP": kp, "KI": ki, "KD": 0.0}
-    if m == "PID":
-        return {"KP": kp, "KI": ki, "KD": kd}
-    return None
-
 
 def _ring_init(capacity: int):
     n = max(1, int(capacity))
@@ -1045,26 +1010,28 @@ def run_relay_tuning(
     Ki_tl = (Kp_tl / Ti_tl) if Ti_tl > 0.0 else 0.0
     Kd_tl = Kp_tl * Td_tl
 
-    zn_base = {"KP": Kp_zn, "KI": Ki_zn, "KD": Kd_zn}
-    tl_base = {"KP": Kp_tl, "KI": Ki_tl, "KD": Kd_tl}
-    sets = {
-        "ZN2_P": _rule_terms(zn_base, "P"),
-        "ZN2_PI": _rule_terms(zn_base, "PI"),
-        "ZN2_PID": _rule_terms(zn_base, "PID"),
-        "TL_P": _rule_terms(tl_base, "P"),
-        "TL_PI": _rule_terms(tl_base, "PI"),
-        "TL_PID": _rule_terms(tl_base, "PID"),
-    }
     requested_rule = str(cfg.TUNING_METHOD).upper()
     selected_rule = requested_rule
-    if selected_rule not in sets:
+    if not (selected_rule.startswith("ZN2_") or selected_rule.startswith("TL_")):
         return _abort_tuning("TUNING relay requires TUNING_METHOD in {ZN2_*, TL_*} (current: %s)" % requested_rule)
-
-    pb_span = float(cfg.SPAN)
-    base_set = sets.get(selected_rule, sets["ZN2_PID"])
-    KP = float(base_set["KP"])
-    KI = float(base_set["KI"])
-    KD = float(base_set["KD"])
+    mode = selected_rule.split("_", 1)[-1]
+    if selected_rule.startswith("ZN2_"):
+        KP = float(Kp_zn)
+        KI = float(Ki_zn)
+        KD = float(Kd_zn)
+    else:
+        KP = float(Kp_tl)
+        KI = float(Ki_tl)
+        KD = float(Kd_tl)
+    if mode == "P":
+        KI = 0.0
+        KD = 0.0
+    elif mode == "PI":
+        KD = 0.0
+    elif mode != "PID":
+        return _abort_tuning("unsupported relay tuning PID mode: %s" % mode)
+    from control import parallel_to_ideal_terms
+    Kc, Ti_s, Td_s = parallel_to_ideal_terms(KP, KI, KD)
 
     print("# RESULT:")
     print("# ========================================")
@@ -1074,11 +1041,11 @@ def run_relay_tuning(
     print("# relay summary: type=2pos-onoff band=±%.2f °C u_high=%.1f%% u_low=%.1f%% cycles used=%d"
           % (band, u_high, u_low, len(periods_keep)))
     print("# tuning method: %s" % tuning_method_label(selected_rule))
-    applied = _pid_views(KP, KI, KD, pb_span)
     print("# applied parallel gains: Kp=%s Ki=%s Kd=%s"
-          % (_fmt_opt(applied["KP"]), _fmt_opt(applied["KI"]), _fmt_opt(applied["KD"])))
+          % (_fmt_opt(KP), _fmt_opt(KI), _fmt_opt(KD)))
     print("# applied ideal gains: Kc=%s Ti=%s Td=%s"
-          % (_fmt_opt(applied["KP"]), _fmt_opt(applied["TI_S"], "s"), _fmt_opt(applied["TD_S"], "s")))
+          % (_fmt_opt(Kc), _fmt_opt(Ti_s, "s"), _fmt_opt(Td_s, "s")))
     print("# ========================================")
+    gc.collect()
 
     return (KP, KI, KD)

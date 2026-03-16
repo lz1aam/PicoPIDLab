@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import ast
 import select
 import sys
 import time
@@ -55,10 +56,18 @@ FOPDT_APPLIED_RE = re.compile(
     r"applied method=.*?:\s*K=([0-9.eE+-]+)\s*.*?\s+tau=([0-9.eE+-]+)\s*s\s+theta=([0-9.eE+-]+)\s*s\s+rmse=([0-9.eE+-]+)",
     re.IGNORECASE,
 )
+FOPDT_APPLIED_MODEL_RE = re.compile(
+    r"applied model:\s*K=([0-9.eE+-]+)\s*.*?\s+tau=([0-9.eE+-]+)\s*s\s+theta=([0-9.eE+-]+)\s*s\s+rmse=([0-9.eE+-]+)",
+    re.IGNORECASE,
+)
 FOPDT_STEP_RE = re.compile(r"step:\s*([0-9.eE+-]+)%\s*->\s*([0-9.eE+-]+)%", re.IGNORECASE)
+FOPDT_INPUT_STEP_RE = re.compile(r"input step:\s*([0-9.eE+-]+)%\s*->\s*([0-9.eE+-]+)%", re.IGNORECASE)
 FOPDT_Y0_RE = re.compile(r"initial steady temperature y0=([0-9.eE+-]+)", re.IGNORECASE)
 FOPDT_Y1_RE = re.compile(r"final steady temperature y1=([0-9.eE+-]+)", re.IGNORECASE)
 FOPDT_METHOD_RE = re.compile(r"applied method=([A-Za-z0-9_]+)", re.IGNORECASE)
+FOPDT_SELECTED_METHOD_RE = re.compile(r"selected method:\s*([A-Za-z0-9_]+)", re.IGNORECASE)
+FOPDT_Y0_LABEL_RE = re.compile(r"initial steady temperature:\s*([0-9.eE+-]+)", re.IGNORECASE)
+FOPDT_Y1_LABEL_RE = re.compile(r"final steady temperature:\s*([0-9.eE+-]+)", re.IGNORECASE)
 TUNING_GAINS_RE = re.compile(r"TUNING: runtime gains updated -> Kp=([0-9.eE+-]+)\s+Ki=([0-9.eE+-]+)\s+Kd=([0-9.eE+-]+)")
 TUNING_PARALLEL_FORM_RE = re.compile(
     r"(?:Applied PARALLEL form|applied parallel gains):\s*Kp=([^\s]+)\s+Ki=([^\s]+)\s+Kd=([^\s]+)",
@@ -1575,7 +1584,13 @@ def save_csv(path: Path, telemetry: np.ndarray):
                 w.writerow([f"{row[0]:.2f}", f"{row[1]:.1f}", f"{row[2]:.1f}", f"{row[3]:.1f}"])
 
 
-def save_plot(path: Path, telemetry: np.ndarray, title: str, plot_cfg: Optional[Dict[str, object]] = None):
+def save_plot(
+    path: Path,
+    telemetry: np.ndarray,
+    title: str,
+    plot_cfg: Optional[Dict[str, object]] = None,
+    keep_open: bool = False,
+):
     cfg = plot_cfg or {}
     figsize = cfg.get("figsize", [11, 7])
     if not (isinstance(figsize, (list, tuple)) and len(figsize) == 2):
@@ -1615,8 +1630,376 @@ def save_plot(path: Path, telemetry: np.ndarray, title: str, plot_cfg: Optional[
         ax2.legend(loc=legend_loc)
     fig.suptitle(title)
     fig.tight_layout()
+    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title=title)
+
+
+def _finalize_saved_figure(fig, path: Path, dpi: int, keep_open: bool = False, window_title: Optional[str] = None):
     fig.savefig(path, dpi=dpi)
+    if keep_open:
+        try:
+            if window_title:
+                mgr = getattr(fig.canvas, "manager", None)
+                if mgr is not None and hasattr(mgr, "set_window_title"):
+                    mgr.set_window_title(str(window_title))
+            fig.canvas.draw_idle()
+            fig.canvas.flush_events()
+            return
+        except Exception:
+            pass
     plt.close(fig)
+
+
+def _parse_param_value_text(text: str) -> object:
+    s = str(text).strip()
+    if not s:
+        return ""
+    try:
+        return ast.literal_eval(s)
+    except Exception:
+        pass
+    low = s.lower()
+    if low == "none":
+        return None
+    if low == "true":
+        return True
+    if low == "false":
+        return False
+    try:
+        if any(ch in s for ch in (".", "e", "E")):
+            return float(s)
+        return int(s)
+    except Exception:
+        return s
+
+
+def _parse_params_report_lines(lines: Sequence[str]) -> Dict[str, object]:
+    out: Dict[str, object] = {}
+    row_re = re.compile(r"^#\s+([A-Z][A-Z0-9_]+)\s+(.+?)(?:\s+#.*)?$")
+    for line in lines:
+        m = row_re.match(str(line).rstrip())
+        if not m:
+            continue
+        out[str(m.group(1)).upper()] = _parse_param_value_text(m.group(2))
+    return out
+
+
+def _parse_runtime_snapshot_lines(lines: Sequence[str]) -> Dict[str, object]:
+    out: Dict[str, object] = {}
+    row_re = re.compile(r"^#\s+([A-Z][A-Z0-9_]+)\s+=\s+(.+)$")
+    for line in lines:
+        m = row_re.match(str(line).rstrip())
+        if not m:
+            continue
+        out[str(m.group(1)).upper()] = _parse_param_value_text(m.group(2))
+    return out
+
+
+def _read_runtime_params(session: PicoSession, timeout_s: float) -> Dict[str, object]:
+    lines = session.send_cmd_wait_prompt("snapshot", timeout_s=max(2.0, timeout_s))
+    params = _parse_runtime_snapshot_lines(lines)
+    if params:
+        return params
+    lines = session.send_cmd_wait_prompt("params all", timeout_s=max(2.0, timeout_s))
+    return _parse_params_report_lines(lines)
+
+
+def _extract_fopdt_model_from_params(params: Dict[str, object]) -> Optional[Dict[str, float]]:
+    try:
+        K = float(params["MODEL_K"])
+        tau_s = float(params["MODEL_TAU_S"])
+        theta_s = float(params["MODEL_THETA_S"])
+    except Exception:
+        return None
+    if (not np.isfinite(K)) or (not np.isfinite(tau_s)) or (not np.isfinite(theta_s)) or (tau_s <= 0.0):
+        return None
+    out: Dict[str, float] = {"K": K, "tau_s": tau_s, "theta_s": theta_s}
+    rmse = _safe_float(params.get("MODEL_RMSE"), None)
+    if rmse is not None and np.isfinite(rmse):
+        out["rmse"] = float(rmse)
+    return out
+
+
+def _fopdt_frequency_grid(tau_s: float, theta_s: float) -> np.ndarray:
+    t_char = max(float(tau_s), float(theta_s), 1e-3)
+    w_min = max(1e-4, 0.01 / t_char)
+    w_max = max(w_min * 10.0, 100.0 / t_char)
+    return np.logspace(np.log10(w_min), np.log10(w_max), 360)
+
+
+def _frequency_grid_with_max(tau_s: float, theta_s: float, w_max: float) -> np.ndarray:
+    t_char = max(float(tau_s), float(theta_s), 1e-3)
+    w_min = max(1e-4, 0.01 / t_char)
+    w_hi = max(float(w_max), w_min * 10.0)
+    return np.logspace(np.log10(w_min), np.log10(w_hi), 360)
+
+
+def _fopdt_freq_response(K: float, tau_s: float, theta_s: float, w: np.ndarray) -> np.ndarray:
+    jw = 1j * w
+    return float(K) * np.exp(-jw * float(theta_s)) / (1.0 + jw * float(tau_s))
+
+
+def _save_frequency_bode_plot(
+    path: Path,
+    title: str,
+    w: np.ndarray,
+    H: np.ndarray,
+    plot_cfg: Optional[Dict[str, object]] = None,
+    margin_info: Optional[Dict[str, float]] = None,
+    keep_open: bool = False,
+):
+    cfg = plot_cfg or {}
+    figsize = cfg.get("figsize", [11, 7])
+    if not (isinstance(figsize, (list, tuple)) and len(figsize) == 2):
+        figsize = [11, 7]
+    dpi = int(cfg.get("dpi", 140))
+    lw = float(cfg.get("line_width", 1.8))
+    show_grid = bool(cfg.get("show_grid", True))
+
+    mag_db = 20.0 * np.log10(np.maximum(np.abs(H), 1e-12))
+    phase_deg = np.unwrap(np.angle(H)) * 180.0 / np.pi
+
+    fig, (ax_mag, ax_phase) = plt.subplots(
+        2,
+        1,
+        figsize=(float(figsize[0]), float(figsize[1])),
+        sharex=True,
+    )
+    mag_color = "tab:blue"
+    phase_color = "tab:orange"
+    ref_color = "0.5"
+
+    mag_line = ax_mag.semilogx(w, mag_db, linewidth=lw, color=mag_color, label="Magnitude")[0]
+    phase_line = ax_phase.semilogx(w, phase_deg, linewidth=lw, color=phase_color, label="Phase")[0]
+
+    ax_mag.set_ylabel("Magnitude [dB]", color=mag_color)
+    ax_phase.set_xlabel("Frequency [rad/s]")
+    ax_phase.set_ylabel("Phase [deg]", color=phase_color)
+    ax_mag.tick_params(axis="y", colors=mag_color)
+    ax_phase.tick_params(axis="y", colors=phase_color)
+    if show_grid:
+        ax_mag.grid(True, which="major", color="0.78", linewidth=0.8)
+        ax_mag.grid(True, which="minor", color="0.9", linewidth=0.45)
+        ax_phase.grid(True, which="major", color="0.78", linewidth=0.8)
+        ax_phase.grid(True, which="minor", color="0.9", linewidth=0.45)
+    ax_mag.axhline(0.0, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.7)
+    ax_phase.axhline(-180.0, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.55)
+    ax_mag.legend([mag_line], ["Magnitude"], loc=str(cfg.get("legend_loc", "best")))
+    ax_phase.legend([phase_line], ["Phase"], loc=str(cfg.get("legend_loc", "best")))
+
+    if isinstance(margin_info, dict):
+        w_gc = _safe_float(margin_info.get("w_gc"), None)
+        w_pc = _safe_float(margin_info.get("w_pc"), None)
+        pm_deg = _safe_float(margin_info.get("pm_deg"), None)
+        gm_db = _safe_float(margin_info.get("gm_db"), None)
+        phase_gc_deg = _safe_float(margin_info.get("phase_gc_deg"), None)
+        mag_pc_db = _safe_float(margin_info.get("mag_pc_db"), None)
+        if (w_gc is not None) and np.isfinite(w_gc) and (phase_gc_deg is not None) and np.isfinite(phase_gc_deg):
+            ax_phase.plot([w_gc], [phase_gc_deg], marker="o", color=ref_color, markersize=5)
+            ax_mag.axvline(w_gc, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.7)
+            ax_phase.axvline(w_gc, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.7)
+            gc_to_right = w_gc < (w[0] * w[-1]) ** 0.5
+            ax_phase.annotate(
+                f"PM  {pm_deg:.1f}°  @ {w_gc:.3g} rad/s",
+                xy=(w_gc, phase_gc_deg),
+                xytext=((10, -10) if gc_to_right else (-10, -10)),
+                textcoords="offset points",
+                color="black",
+                ha=("left" if gc_to_right else "right"),
+            )
+        if (w_pc is not None) and np.isfinite(w_pc) and (mag_pc_db is not None) and np.isfinite(mag_pc_db):
+            ax_mag.plot([w_pc], [mag_pc_db], marker="o", color=ref_color, markersize=5)
+            ax_mag.axvline(w_pc, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.7)
+            ax_phase.axvline(w_pc, color=ref_color, linestyle="--", linewidth=0.9, alpha=0.7)
+            gm_txt = "∞" if (gm_db is None or not np.isfinite(gm_db)) else f"{gm_db:.2f} dB"
+            pc_to_right = w_pc < (w[0] * w[-1]) ** 0.5
+            ax_mag.annotate(
+                f"GM  {gm_txt}  @ {w_pc:.3g} rad/s",
+                xy=(w_pc, mag_pc_db),
+                xytext=((10, 10) if pc_to_right else (-10, 10)),
+                textcoords="offset points",
+                color="black",
+                ha=("left" if pc_to_right else "right"),
+            )
+    fig.suptitle(title)
+    fig.tight_layout()
+    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title=title)
+
+
+def _interpolate_crossing(x1: float, y1: float, x2: float, y2: float, target: float = 0.0) -> Optional[float]:
+    if not (np.isfinite(x1) and np.isfinite(y1) and np.isfinite(x2) and np.isfinite(y2)):
+        return None
+    dy = y2 - y1
+    if abs(dy) < 1e-12:
+        return None
+    alpha = (target - y1) / dy
+    if alpha < 0.0 or alpha > 1.0:
+        return None
+    return x1 + alpha * (x2 - x1)
+
+
+def _interpolate_series(log_w: np.ndarray, values: np.ndarray, log_w_target: float) -> float:
+    return float(np.interp(log_w_target, log_w, values))
+
+
+def _find_log_crossings(log_w: np.ndarray, values: np.ndarray, target: float) -> List[float]:
+    out: List[float] = []
+    for i in range(len(log_w) - 1):
+        y1 = float(values[i]) - float(target)
+        y2 = float(values[i + 1]) - float(target)
+        if (y1 == 0.0) or (y1 * y2 <= 0.0):
+            x = _interpolate_crossing(float(log_w[i]), y1, float(log_w[i + 1]), y2, 0.0)
+            if x is None:
+                continue
+            if out and abs(x - out[-1]) < 1e-9:
+                continue
+            out.append(float(x))
+    return out
+
+
+def _estimate_margin_info(w: np.ndarray, H: np.ndarray) -> Dict[str, object]:
+    mag_db = 20.0 * np.log10(np.maximum(np.abs(H), 1e-12))
+    phase_deg = np.unwrap(np.angle(H)) * 180.0 / np.pi
+    log_w = np.log10(w)
+    out: Dict[str, object] = {}
+
+    pm_candidates = []
+    for x in _find_log_crossings(log_w, mag_db, 0.0):
+        phase_gc = _interpolate_series(log_w, phase_deg, x)
+        pm_deg = 180.0 + phase_gc
+        pm_candidates.append(
+            {
+                "w_gc": float(10.0 ** x),
+                "phase_gc_deg": float(phase_gc),
+                "pm_deg": float(pm_deg),
+                "point_gc": complex(
+                    _interpolate_series(log_w, np.real(H), x),
+                    _interpolate_series(log_w, np.imag(H), x),
+                ),
+            }
+        )
+    if pm_candidates:
+        out.update(pm_candidates[0])
+
+    phase_min = float(np.min(phase_deg))
+    phase_max = float(np.max(phase_deg))
+    target_lo = int(math.floor((phase_min + 180.0) / 360.0))
+    target_hi = int(math.ceil((phase_max + 180.0) / 360.0))
+    gm_candidates = []
+    for n in range(target_lo, target_hi + 1):
+        target_phase = -180.0 + (360.0 * n)
+        for x in _find_log_crossings(log_w, phase_deg, target_phase):
+            mag_pc_db = _interpolate_series(log_w, mag_db, x)
+            gm_candidates.append(
+                {
+                    "w_pc": float(10.0 ** x),
+                    "mag_pc_db": float(mag_pc_db),
+                    "gm_db": float(-mag_pc_db),
+                    "point_pc": complex(
+                        _interpolate_series(log_w, np.real(H), x),
+                        _interpolate_series(log_w, np.imag(H), x),
+                    ),
+                }
+            )
+    if gm_candidates:
+        out.update(gm_candidates[0])
+    return out
+
+
+def _parallel_pid_from_runtime_params(params: Dict[str, object]) -> Optional[Dict[str, float]]:
+    control_mode = str(params.get("CONTROL_MODE", "")).upper()
+    if control_mode != "PID":
+        return None
+    variant = str(params.get("PID_VARIANT", "")).upper()
+    if variant not in ("PID", "2DOF", "FF_PID"):
+        return None
+    algorithm = str(params.get("PID_ALGORITHM", "")).upper()
+    if algorithm == "PARALLEL":
+        kp = _safe_float(params.get("KP"), None)
+        ki = _safe_float(params.get("KI"), None)
+        kd = _safe_float(params.get("KD"), None)
+    elif algorithm == "IDEAL":
+        kc = _safe_float(params.get("KC"), None)
+        ti_s = _safe_float(params.get("TI_S"), None)
+        td_s = _safe_float(params.get("TD_S"), None)
+        if kc is None:
+            return None
+        kp = float(kc)
+        ki = 0.0 if (ti_s is None or ti_s <= 0.0) else float(kc) / float(ti_s)
+        kd = 0.0 if (td_s is None or td_s <= 0.0) else float(kc) * float(td_s)
+    elif algorithm == "SERIES":
+        kc = _safe_float(params.get("KC"), None)
+        ti_s = _safe_float(params.get("TI_S"), None)
+        td_s = _safe_float(params.get("TD_S"), None)
+        if kc is None:
+            return None
+        ti_eff = 0.0 if ti_s is None else float(ti_s)
+        td_eff = 0.0 if td_s is None else float(td_s)
+        kp = float(kc) * (1.0 + (td_eff / ti_eff if ti_eff > 0.0 else 0.0))
+        ki = 0.0 if ti_eff <= 0.0 else float(kc) / ti_eff
+        kd = float(kc) * td_eff
+    else:
+        return None
+    if kp is None or ki is None or kd is None:
+        return None
+    return {
+        "kp": float(kp),
+        "ki": float(ki),
+        "kd": float(kd),
+        "algorithm": algorithm,
+        "variant": variant,
+    }
+
+
+def _pid_loop_freq_response(pid_cfg: Dict[str, float], model: Dict[str, float]) -> Tuple[np.ndarray, np.ndarray]:
+    K = float(model["K"])
+    tau_s = float(model["tau_s"])
+    theta_s = float(model["theta_s"])
+    kp = float(pid_cfg["kp"])
+    ki = float(pid_cfg["ki"])
+    kd = float(pid_cfg["kd"])
+    w = _fopdt_frequency_grid(tau_s, theta_s)
+    for _ in range(6):
+        G = _fopdt_freq_response(K, tau_s, theta_s, w)
+        jw = 1j * w
+        C = kp + (ki / jw) + (kd * jw)
+        L = C * G
+        mag_db = 20.0 * np.log10(np.maximum(np.abs(L), 1e-12))
+        phase_deg = np.unwrap(np.angle(L)) * 180.0 / np.pi
+        needs_more_mag = float(mag_db[-1]) > 0.0
+        needs_more_phase = float(phase_deg[-1]) > -180.0
+        if not (needs_more_mag or needs_more_phase):
+            return w, L
+        w = _frequency_grid_with_max(tau_s, theta_s, float(w[-1]) * 4.0)
+    return w, L
+
+
+def _save_tuned_loop_frequency_artifacts(
+    run_dir: Path,
+    exp: ExperimentSpec,
+    model: Dict[str, float],
+    runtime_params: Dict[str, object],
+    plot_cfg: Optional[Dict[str, object]] = None,
+    keep_open: bool = False,
+):
+    pid_cfg = _parallel_pid_from_runtime_params(runtime_params)
+    if not pid_cfg:
+        _emit_lab("skipped frequency margins (active controller is not a supported fixed PID form)")
+        return
+    try:
+        w, L = _pid_loop_freq_response(pid_cfg, model)
+        margin_info = _estimate_margin_info(w, L)
+        bode_path = run_dir / "bode.png"
+        _save_frequency_bode_plot(
+            bode_path,
+            f"Open-Loop Bode ({exp.shortname})",
+            w,
+            L,
+            plot_cfg,
+            margin_info=margin_info,
+            keep_open=keep_open,
+        )
+    except Exception as exc:
+        _emit_lab(f"warning: tune Bode plot skipped ({exc})")
 
 
 def parse_fopdt_summary(raw_lines: Sequence[str]) -> Optional[Dict[str, float]]:
@@ -1631,6 +2014,15 @@ def parse_fopdt_summary(raw_lines: Sequence[str]) -> Optional[Dict[str, float]]:
             }
     for line in raw_lines:
         m = FOPDT_APPLIED_RE.search(line)
+        if m:
+            return {
+                "K": float(m.group(1)),
+                "tau_s": float(m.group(2)),
+                "theta_s": float(m.group(3)),
+                "rmse": float(m.group(4)),
+            }
+    for line in raw_lines:
+        m = FOPDT_APPLIED_MODEL_RE.search(line)
         if m:
             return {
                 "K": float(m.group(1)),
@@ -1657,21 +2049,46 @@ def parse_fopdt_model_from_log(raw_lines: Sequence[str]) -> Optional[Dict[str, o
             out["u0_pct"] = float(m.group(1))
             out["u1_pct"] = float(m.group(2))
             break
+    if "u0_pct" not in out:
+        for line in raw_lines:
+            m = FOPDT_INPUT_STEP_RE.search(line)
+            if m is not None:
+                out["u0_pct"] = float(m.group(1))
+                out["u1_pct"] = float(m.group(2))
+                break
     for line in raw_lines:
         m = FOPDT_Y0_RE.search(line)
         if m is not None:
             out["y0"] = float(m.group(1))
             break
+    if "y0" not in out:
+        for line in raw_lines:
+            m = FOPDT_Y0_LABEL_RE.search(line)
+            if m is not None:
+                out["y0"] = float(m.group(1))
+                break
     for line in raw_lines:
         m = FOPDT_Y1_RE.search(line)
         if m is not None:
             out["y1"] = float(m.group(1))
             break
+    if "y1" not in out:
+        for line in raw_lines:
+            m = FOPDT_Y1_LABEL_RE.search(line)
+            if m is not None:
+                out["y1"] = float(m.group(1))
+                break
     for line in raw_lines:
         m = FOPDT_METHOD_RE.search(line)
         if m is not None:
             out["method"] = str(m.group(1)).upper()
             break
+    if "method" not in out:
+        for line in raw_lines:
+            m = FOPDT_SELECTED_METHOD_RE.search(line)
+            if m is not None:
+                out["method"] = str(m.group(1)).upper()
+                break
     return out
 
 
@@ -1866,7 +2283,12 @@ def merge_metrics_cfg(base_cfg: Optional[Dict[str, object]], override_cfg: Optio
     return out
 
 
-def save_metrics_summary_plot(path: Path, metrics: Dict[str, object], metrics_cfg: Optional[Dict[str, object]] = None):
+def save_metrics_summary_plot(
+    path: Path,
+    metrics: Dict[str, object],
+    metrics_cfg: Optional[Dict[str, object]] = None,
+    keep_open: bool = False,
+):
     if isinstance(metrics_cfg, dict) and (not bool(metrics_cfg.get("save_plot", True))):
         return
     lines = _build_metrics_lines(metrics, metrics_cfg)
@@ -1888,8 +2310,8 @@ def save_metrics_summary_plot(path: Path, metrics: Dict[str, object], metrics_cf
         transform=ax.transAxes,
     )
     fig.tight_layout()
-    fig.savefig(path, bbox_inches="tight", pad_inches=0.08)
-    plt.close(fig)
+    dpi = int((metrics_cfg or {}).get("dpi", 140)) if isinstance(metrics_cfg, dict) else 140
+    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title="Run Metrics")
 
 
 def run_single_experiment(
@@ -2034,6 +2456,13 @@ def run_single_experiment(
         else:
             _emit_lab("warning: runner could not parse tuning summary from firmware log")
 
+    runtime_params: Dict[str, object] = {}
+    if exp.kind in ("fopdt", "tuning"):
+        try:
+            runtime_params = _read_runtime_params(session, cfg.timeout_s)
+        except Exception as ex:
+            _emit_lab(f"warning: runtime parameter snapshot unavailable ({ex})")
+
     if exp.kind == "tuning":
         metrics: Dict[str, object] = {}
         for k in ("samples", "duration_s", "switch_count", "error"):
@@ -2051,10 +2480,35 @@ def run_single_experiment(
     (run_dir / "plot_settings.json").write_text(
         json.dumps(effective_plot_cfg, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    keep_artifacts_open = bool(hold_live_at_end and run_ok)
     if exp.kind == "fopdt":
         write_fopdt_model_artifacts(raw_lines, run_dir)
-    save_plot(run_dir / "plot.png", telemetry, f"{exp.exp_id} ({exp.shortname})", effective_plot_cfg)
-    save_metrics_summary_plot(run_dir / "metrics_summary.png", metrics_full, cfg.metrics_cfg)
+    if exp.kind == "tuning":
+        model = _extract_fopdt_model_from_params(runtime_params)
+        if model:
+            _save_tuned_loop_frequency_artifacts(
+                run_dir,
+                exp,
+                model,
+                runtime_params,
+                effective_plot_cfg,
+                keep_open=keep_artifacts_open,
+            )
+        else:
+            _emit_lab("warning: tune Bode plot skipped (no valid FOPDT model in runtime state)")
+    save_plot(
+        run_dir / "plot.png",
+        telemetry,
+        f"{exp.exp_id} ({exp.shortname})",
+        effective_plot_cfg,
+        keep_open=keep_artifacts_open,
+    )
+    save_metrics_summary_plot(
+        run_dir / "metrics_summary.png",
+        metrics_full,
+        cfg.metrics_cfg,
+        keep_open=keep_artifacts_open,
+    )
     return RunResult(
         telemetry=telemetry,
         raw_lines=raw_lines,

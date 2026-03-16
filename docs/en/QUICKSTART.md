@@ -1,6 +1,6 @@
 # Quick Start
 
-Version target: **v1.2.9** (2026-03-15)
+Version target: **v1.2.10** (2026-03-16)
 
 This guide covers both supported workflows:
 - **Thonny workflow** (direct firmware terminal)

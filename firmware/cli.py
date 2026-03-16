@@ -171,6 +171,21 @@ _COMMAND_SPECS = (
     ("exit", "leave prompt"),
 )
 
+
+def _iter_snapshot_keys():
+    seen = set()
+    for group in ("core", "control", "safety", "pid", "onoff", "fuzzy", "mpc", "tune", "model"):
+        meta = _PARAM_GROUPS.get(group)
+        if meta is None:
+            continue
+        _, items = meta
+        for key, _desc in items:
+            ku = str(key).upper()
+            if ku in seen:
+                continue
+            seen.add(ku)
+            yield ku
+
 def _parse_cli_value(name: str, raw: str):
     s = raw.strip()
     if len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
@@ -300,6 +315,14 @@ def _print_command_catalog() -> None:
         print("#   %-58s # %s" % (syntax, desc))
     print("# scopes: active, all, core, control, safety, pid, onoff, fuzzy, mpc, tune, model")
     print("# ========================================")
+
+
+def print_runtime_snapshot(profile_mod) -> None:
+    """Stable machine-readable snapshot for host tooling."""
+    print("# SNAPSHOT:")
+    for key in _iter_snapshot_keys():
+        if hasattr(profile_mod, key):
+            print("#   %s = %r" % (key, getattr(profile_mod, key)))
 
 
 def show_runtime_params(profile_mod, scope: str = "active") -> None:
@@ -504,6 +527,9 @@ def wait_for_run_command(profile_mod) -> str:
         if (cmd == "params") or cmd.startswith("params "):
             parts = line.split(None, 1)
             show_runtime_params(profile_mod, parts[1] if len(parts) > 1 else "active")
+            continue
+        if cmd == "snapshot":
+            print_runtime_snapshot(profile_mod)
             continue
         if cmd == "check":
             try:

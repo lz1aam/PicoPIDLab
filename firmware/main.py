@@ -18,7 +18,7 @@ from hardware import NTCLG100E2103JB, Heater, StatusRGB, yield_cpu, advance_dead
 import config as P
 from cli import wait_for_run_command, poll_command_nonblocking
 
-_FIRMWARE_VERSION = "1.2.9"
+_FIRMWARE_VERSION = "1.2.10"
 
 def _isfinite(x) -> bool:
     try:
@@ -321,24 +321,22 @@ def _mode_banner_lines_from_snapshot(cfg, telemetry_mode: str):
 
 
 def _apply_tuned_parallel_gains(profile_mod, kp: float, ki: float, kd: float) -> None:
-    from control import pid_forms_from_gains, series_configured_from_ideal
+    from control import parallel_to_ideal_terms, series_configured_from_ideal_terms
 
     profile_mod.KP = float(kp)
     profile_mod.KI = float(ki)
     profile_mod.KD = float(kd)
-    ideal_auto = pid_forms_from_gains(kp, ki, kd, float(profile_mod.SPAN))["IDEAL"]
+    kc_eff, ti_eff, td_eff = parallel_to_ideal_terms(kp, ki, kd)
     algorithm = str(profile_mod.PID_ALGORITHM).upper()
     if algorithm == "SERIES":
-        series_cfg = series_configured_from_ideal(
-            ideal_auto["KC"], ideal_auto["TI_S"], ideal_auto["TD_S"]
-        )
-        profile_mod.KC = float(series_cfg["KC"])
-        profile_mod.TI_S = float(series_cfg["TI_S"])
-        profile_mod.TD_S = float(series_cfg["TD_S"])
+        kc_cfg, ti_cfg, td_cfg = series_configured_from_ideal_terms(kc_eff, ti_eff, td_eff)
+        profile_mod.KC = float(kc_cfg)
+        profile_mod.TI_S = float(ti_cfg)
+        profile_mod.TD_S = float(td_cfg)
         return
-    profile_mod.KC = float(ideal_auto["KC"])
-    profile_mod.TI_S = 0.0 if ideal_auto["TI_S"] is None else float(ideal_auto["TI_S"])
-    profile_mod.TD_S = 0.0 if ideal_auto["TD_S"] is None else float(ideal_auto["TD_S"])
+    profile_mod.KC = float(kc_eff)
+    profile_mod.TI_S = 0.0 if ti_eff is None else float(ti_eff)
+    profile_mod.TD_S = 0.0 if td_eff is None else float(td_eff)
 
 
 def _validate_run_action(action: str, profile_mod) -> None:
@@ -515,6 +513,7 @@ def _run_pid_relay_tuning(sensor, heater, indicator, cfg, run_state):
     if gains is None:
         _shutdown_outputs(heater, indicator)
         return False
+    gc.collect()
     KP, KI, KD = gains
     if bool(run_state.get("aborted")):
         _shutdown_outputs(heater, indicator)
@@ -542,6 +541,7 @@ def _run_pid_model_tuning(heater, indicator):
         _shutdown_outputs(heater, indicator)
         return False
 
+    gc.collect()
     _apply_tuned_parallel_gains(P, KP, KI, KD)
     _shutdown_outputs(heater, indicator, done=True)
     return True

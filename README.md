@@ -103,7 +103,7 @@ Parallel PID reduces oscillation and recovers after a disturbance with smoother 
 
 Ideal-form PID also supports ramp commands, which makes it useful for demonstrations where setpoint shaping matters as much as final tracking accuracy.
 
-#### 2DOF PID
+#### 2DOF PID control
 
 ![2DOF PID step tracking plot](docs/examples/pid-2dof-step.png)
 

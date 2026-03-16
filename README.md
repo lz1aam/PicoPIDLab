@@ -113,7 +113,7 @@ Two-degree-of-freedom PID separates setpoint weighting from disturbance rejectio
 
 ![PID feedforward tracking plot](docs/examples/pid-feedforward-tracking.png)
 
-Feedforward PID combines the feedback loop with a model-based compensating term, reducing recovery time and heater effort after a disturbance.
+Feedforward PID combines the feedback loop with a compensating term and shows smooth setpoint tracking with reduced control effort.
 
 #### Fuzzy control
 

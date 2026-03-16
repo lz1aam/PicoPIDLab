@@ -38,19 +38,19 @@ Typical plot meaning:
 
 Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, and `theta`.
 
-### Relay tuning run (`ZN2_PID`)
+### Relay tuning run (Ziegler-Nichols 2 PID)
 
 ![PID relay tuning run plot](docs/examples/pid-relay-zn2-run.png)
 
 Relay cycling around the target temperature to extract oscillation metrics and tuned gains.
 
-### Relay-method Bode margins (`ZN2_PID`)
+### Relay-method Bode margins (Ziegler-Nichols 2 PID)
 
 ![ZN2 PID Bode plot](docs/examples/pid-relay-zn2-bode.png)
 
 Oscillation-based tuning can push the loop close to the stability boundary. The Bode plot shows that directly through weak or negative classical margins.
 
-### Model-method Bode margins (`CC_PID`)
+### Model-method Bode margins (Cohen-Coon PID)
 
 ![CC PID Bode plot](docs/examples/pid-model-cc-bode.png)
 
@@ -64,11 +64,35 @@ Model-based tuning gives a more conservative loop. Positive gain and phase margi
 
 Simple bang-bang control is easy to understand and visibly cycles around the target. It is a useful baseline for comparing more advanced regulators.
 
+#### P-only control
+
+![P-only step tracking plot](docs/examples/pid-p-step.png)
+
+Pure proportional control reaches the target quickly but leaves a visible offset and weaker disturbance rejection than PI or PID.
+
+#### PI control
+
+![PI step tracking plot](docs/examples/pid-pi-step.png)
+
+PI control removes the steady-state offset and gives a cleaner thermal response than P-only control while staying simpler than full PID.
+
 #### Parallel PID with disturbance rejection
 
 ![Parallel PID step tracking plot](docs/examples/pid-parallel-step.png)
 
 Parallel PID reduces oscillation and recovers after a disturbance with smoother heater action than ON/OFF control.
+
+#### Ideal PID with ramp setpoint
+
+![Ideal PID ramp tracking plot](docs/examples/pid-ideal-ramp.png)
+
+Ideal-form PID also supports ramp commands, which makes it useful for demonstrations where setpoint shaping matters as much as final tracking accuracy.
+
+#### 2DOF PID
+
+![2DOF PID step tracking plot](docs/examples/pid-2dof-step.png)
+
+Two-degree-of-freedom PID separates setpoint weighting from disturbance rejection, which helps demonstrate how reference shaping changes the transient response.
 
 #### Fuzzy control
 

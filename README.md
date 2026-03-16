@@ -9,6 +9,20 @@ Primary runtime is **MicroPython on RP2040** (RP2040-Zero class boards).
 
 ![PicoPID Lab hardware](hardware/PicoPIDLab-picture.jpg)
 
+## Interfaces
+
+### Thonny firmware workflow
+
+![Thonny interface](docs/examples/thonny.png)
+
+Thonny can be used as the direct firmware-side classroom interface for interactive command entry, parameter changes, and live teaching demos.
+
+### Host lab workflow (`runner/lab.py`)
+
+![runner/lab.py interface](docs/examples/lab.py.png)
+
+`runner/lab.py` provides the experiment-driven host workflow with recipe execution, live plots, run folders, metrics, and promoted report-grade artifacts.
+
 ## What This Shows
 
 The platform is built around one simple lab workflow:

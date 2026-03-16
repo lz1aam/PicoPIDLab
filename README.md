@@ -43,6 +43,7 @@ Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, 
 ![PID relay tuning run plot](docs/examples/pid-relay-zn2-run.png)
 
 Relay cycling around the target temperature to extract oscillation metrics and tuned gains.
+The oscillation experiment follows the Astrom-Hagglund relay-feedback idea for estimating `Ku` and `Pu`, then applies the Ziegler-Nichols 2 PID tuning rule.
 
 ### Relay-method Bode margins (Ziegler-Nichols 2 PID)
 

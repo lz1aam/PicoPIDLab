@@ -109,6 +109,12 @@ Ideal-form PID also supports ramp commands, which makes it useful for demonstrat
 
 Two-degree-of-freedom PID separates setpoint weighting from disturbance rejection, which helps demonstrate how reference shaping changes the transient response.
 
+#### PID with feedforward
+
+![PID feedforward tracking plot](docs/examples/pid-feedforward-tracking.png)
+
+Feedforward PID combines the feedback loop with a model-based compensating term, reducing recovery time and heater effort after a disturbance.
+
 #### Fuzzy control
 
 ![Fuzzy step tracking plot](docs/examples/fuzzy-step.png)

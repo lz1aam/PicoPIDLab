@@ -127,7 +127,7 @@ The fuzzy controller reaches the target with a different output profile, showing
 
 Smith-predictor PI uses the identified model to compensate dead time and improve response on delayed plants.
 
-#### Gain-scheduled PID
+#### Gain-scheduled PID control
 
 ![Gain-scheduled PID step tracking plot](docs/examples/pid-gain-sched-step.png)
 

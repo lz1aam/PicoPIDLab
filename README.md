@@ -34,27 +34,59 @@ Typical plot meaning:
 
 ### FOPDT identification
 
-![FOPDT identification plot](hardware/examples/fopdt-identification.png)
+![FOPDT identification plot](docs/examples/fopdt-identification.png)
 
 Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, and `theta`.
 
-### PID relay tuning
+### Relay tuning run (`ZN2_PID`)
 
-![PID relay tuning plot](hardware/examples/pid-relay-tuning.png)
+![PID relay tuning run plot](docs/examples/pid-relay-zn2-run.png)
 
-Relay cycling around the target temperature for extracting oscillation metrics and tuned gains.
+Relay cycling around the target temperature to extract oscillation metrics and tuned gains.
 
-### PID feedforward tracking
+### Relay-method Bode margins (`ZN2_PID`)
 
-![PID feedforward tracking plot](hardware/examples/pid-feedforward-tracking.png)
+![ZN2 PID Bode plot](docs/examples/pid-relay-zn2-bode.png)
 
-Closed-loop tracking with feedforward support and a disturbance event, showing `PV` recovery to `SP` and the corresponding heater effort.
+Oscillation-based tuning can push the loop close to the stability boundary. The Bode plot shows that directly through weak or negative classical margins.
 
-### MPC tracking
+### Model-method Bode margins (`CC_PID`)
 
-![MPC tracking plot](hardware/examples/mpc-tracking.png)
+![CC PID Bode plot](docs/examples/pid-model-cc-bode.png)
 
-Predictive control example with `YH` and `YP`, including a disturbance event to show model-based recovery and constrained output moves.
+Model-based tuning gives a more conservative loop. Positive gain and phase margins provide a clearer robustness reserve than the relay-tuned case.
+
+### Controller capability examples
+
+#### ON/OFF baseline
+
+![ON/OFF step tracking plot](docs/examples/onoff-step.png)
+
+Simple bang-bang control is easy to understand and visibly cycles around the target. It is a useful baseline for comparing more advanced regulators.
+
+#### Parallel PID with disturbance rejection
+
+![Parallel PID step tracking plot](docs/examples/pid-parallel-step.png)
+
+Parallel PID reduces oscillation and recovers after a disturbance with smoother heater action than ON/OFF control.
+
+#### Fuzzy control
+
+![Fuzzy step tracking plot](docs/examples/fuzzy-step.png)
+
+The fuzzy controller reaches the target with a different output profile, showing that the platform is not limited to classical linear control laws.
+
+#### Smith-predictor PI
+
+![Smith PI step tracking plot](docs/examples/smith-pi-step.png)
+
+Smith-predictor PI uses the identified model to compensate dead time and improve response on delayed plants.
+
+#### Gain-scheduled PID
+
+![Gain-scheduled PID step tracking plot](docs/examples/pid-gain-sched-step.png)
+
+Gain scheduling demonstrates that the device can vary controller aggressiveness across the operating region instead of relying on one fixed PID setting.
 
 Students primarily edit one file:
 - `firmware/config.py`

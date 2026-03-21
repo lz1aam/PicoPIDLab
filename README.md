@@ -2,12 +2,15 @@
 
 Current version: **v1.2.10** (2026-03-16)
 
-PicoPID Lab is an open-source educational platform for university control-systems courses.  
-Students experiment with ON/OFF, PID, Fuzzy, and MPC algorithms on real hardware (RP2040-based thermal plant), then compare controller performance through telemetry, metrics, and plots.
+PicoPID Lab is an open-source educational temperature-control platform for university control-systems courses.  
+Students run ON/OFF, PID, Fuzzy Logic, and MPC experiments on a real RP2040-based thermal plant, then compare controller behavior through telemetry, metrics, and plots.
 
 Primary runtime is **MicroPython on RP2040** (RP2040-Zero class boards).
 
 ![PicoPID Lab hardware](hardware/PicoPIDLab-picture.jpg)
+
+Students primarily edit one file:
+- `firmware/config.py`
 
 ## Interfaces
 
@@ -15,17 +18,17 @@ Primary runtime is **MicroPython on RP2040** (RP2040-Zero class boards).
 
 ![Thonny interface](docs/examples/thonny.png)
 
-Thonny can be used as the direct firmware-side classroom interface for interactive command entry, parameter changes, and live teaching demos.
+Thonny is the direct firmware-side interface for interactive command entry, parameter changes, and live classroom demonstrations.
 
 ### Host lab workflow (`runner/lab.py`)
 
 ![runner/lab.py interface](docs/examples/lab.py.png)
 
-`runner/lab.py` provides the experiment-driven host workflow with recipe execution, live plots, run folders, metrics, and promoted report-grade artifacts.
+`runner/lab.py` is the experiment-driven host interface for recipe execution, live plots, run folders, metrics, and report-grade artifacts.
 
 ## What This Shows
 
-The platform is built around one simple lab workflow:
+The platform follows one simple lab workflow:
 - identify the thermal plant
 - tune a controller
 - run closed-loop experiments
@@ -42,7 +45,7 @@ Typical plot meaning:
 - `PV` vs `SP` shows how well the controller tracks the target temperature
 - `OP` shows how aggressively the heater is driven
 - FOPDT identification plots show the open-loop thermal step used to estimate `K`, `tau`, and `theta`
-- tuning and standard runs produce metrics and comparison plots for repeatable lab reports
+- tuning and control runs produce metrics and plots suitable for repeatable lab reports
 
 ## Example Results
 
@@ -59,17 +62,17 @@ Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, 
 Relay cycling around the target temperature to extract oscillation metrics and tuned gains.
 The oscillation experiment follows the Astrom-Hagglund relay-feedback idea for estimating `Ku` and `Pu`, then applies the Ziegler-Nichols 2 PID tuning rule.
 
-### Relay-method Bode margins (Ziegler-Nichols 2 PID)
+### Relay tuning Bode margins (Ziegler-Nichols 2 PID)
 
 ![ZN2 PID Bode plot](docs/examples/pid-relay-zn2-bode.png)
 
 Oscillation-based tuning can push the loop close to the stability boundary. The Bode plot shows that directly through weak or negative classical margins.
 
-### Model-method Bode margins (Cohen-Coon PID)
+### Model-based tuning Bode margins (Cohen-Coon PID)
 
 ![CC PID Bode plot](docs/examples/pid-model-cc-bode.png)
 
-Model-based tuning gives a more conservative loop. Positive gain and phase margins provide a clearer robustness reserve than the relay-tuned case.
+Model-based tuning gives a more conservative loop with clearly positive gain and phase margins.
 
 ### Controller capability examples
 
@@ -101,25 +104,25 @@ Parallel PID reduces oscillation and recovers after a disturbance with smoother 
 
 ![Ideal PID ramp tracking plot](docs/examples/pid-ideal-ramp.png)
 
-Ideal-form PID also supports ramp commands, which makes it useful for demonstrations where setpoint shaping matters as much as final tracking accuracy.
+Ideal-form PID also supports ramp commands, which makes it useful when setpoint shaping matters as much as final tracking accuracy.
 
 #### 2DOF PID control
 
 ![2DOF PID step tracking plot](docs/examples/pid-2dof-step.png)
 
-Two-degree-of-freedom PID separates setpoint weighting from disturbance rejection, which helps demonstrate how reference shaping changes the transient response.
+Two-degree-of-freedom PID separates setpoint weighting from disturbance rejection, showing how reference shaping changes the transient response.
 
 #### Feedforward PID control
 
 ![PID feedforward tracking plot](docs/examples/pid-feedforward-tracking.png)
 
-Feedforward PID combines the feedback loop with a compensating term and shows smooth setpoint tracking with reduced control effort.
+Feedforward PID combines the feedback loop with a compensating term for smoother tracking and reduced control effort.
 
 #### Fuzzy Logic control
 
 ![Fuzzy step tracking plot](docs/examples/fuzzy-step.png)
 
-The fuzzy controller reaches the target with a different output profile, showing that the platform is not limited to classical linear control laws.
+The fuzzy controller reaches the target with a distinct output profile, showing that the platform is not limited to classical linear control methods.
 
 #### Smith-predictor PI control
 
@@ -137,10 +140,7 @@ Gain scheduling demonstrates that the device can vary controller aggressiveness 
 
 ![MPC tracking plot](docs/examples/mpc-tracking.png)
 
-MPC uses the internal process model to optimize future heater moves under constraints while exposing `YH` and `YP` for prediction-aware teaching demos.
-
-Students primarily edit one file:
-- `firmware/config.py`
+MPC uses the internal process model to optimize future heater moves under constraints while exposing `YH` and `YP` for prediction-aware demonstrations.
 
 ## Project Layout
 
@@ -214,19 +214,19 @@ For PID family:
   - model-based: `ZN1_P`, `ZN1_PI`, `ZN1_PID`, `CC_P`, `CC_PI`, `CC_PID`
   - relay-based: `ZN2_P`, `ZN2_PI`, `ZN2_PID`, `TL_P`, `TL_PI`, `TL_PID`
 
-## Two Workflows
+## Workflows
 
 ### A) Thonny-only workflow
 
 - Run `firmware/main.py` from Thonny.
 - Use firmware commands directly in Thonny shell.
-- Best for interactive teaching/demo sessions.
+- Best for interactive teaching sessions and quick demonstrations.
 
 ### B) Host lab workflow (`runner/lab.py`)
 
 - Experiment-driven runs from `runner/lab.yaml`
 - Automatic run folders with telemetry CSV/log/metrics
-- Best for report-grade repeatable experiments
+- Best for repeatable, report-grade experiments
 
 Run artifacts:
 - `runner/runs/<timestamp>__<EXPERIMENT>__<shortname>/`

@@ -71,7 +71,7 @@ Oscillation-based tuning can drive the loop to instability. The Bode plot shows 
 
 ![CC PID Bode plot](docs/examples/pid-model-cc-bode.png)
 
-Model-based tuning gives a more conservative loop with clearly positive gain and phase margins.
+Model-based tuning produces a more conservative loop. The Bode plot shows that through positive gain and phase margins.
 
 ### Controller capability examples
 

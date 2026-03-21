@@ -56,7 +56,7 @@ Open-loop heater step used to estimate the thermal model parameters `K`, `tau`, 
 
 ![PID relay tuning run plot](docs/examples/pid-relay-zn2-run.png)
 
-Relay feedback around the target temperature follows the Åström-Hägglund approach to estimate the ultimate gain `Ku` and ultimate period `Pu` without manual trial-to-instability. Those oscillation metrics are then mapped to PID gains using classical rules such as Ziegler-Nichols 2 or Tyreus-Luyben.
+Relay feedback around the target temperature follows the Åström-Hägglund approach to estimate the ultimate gain `Ku` and ultimate period `Pu` without manual trial-to-instability. Those oscillation metrics are then converted into PID gains using rules such as Ziegler-Nichols 2 or Tyreus-Luyben.
 
 ### Relay tuning Bode margins (Ziegler-Nichols 2 PID)
 
@@ -118,7 +118,7 @@ Feedforward PID combines the feedback loop with a compensating term for smoother
 
 ![Fuzzy step tracking plot](docs/examples/fuzzy-step.png)
 
-The fuzzy controller reaches the target with a distinct output profile, showing that the platform is not limited to classical linear control methods.
+The fuzzy controller reaches the target with a distinct output profile, showing that the platform is not limited to classical linear control.
 
 #### Smith-predictor PI control
 
@@ -136,7 +136,7 @@ Gain scheduling demonstrates that the device can vary controller aggressiveness 
 
 ![MPC tracking plot](docs/examples/mpc-tracking.png)
 
-MPC uses the internal process model to optimize future heater moves under constraints while exposing `YH` and `YP` for prediction-aware demonstrations.
+MPC uses the internal process model to optimize future heater moves under constraints while exposing `YH` and `YP` for prediction-aware teaching demonstrations.
 
 ## Project Layout
 

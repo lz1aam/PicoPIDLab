@@ -1,6 +1,6 @@
 # Inicio rápido
 
-Versión objetivo: **v1.2.10**
+Versión objetivo: **v1.2.11**
 
 Este documento cubre los dos flujos soportados:
 - **Flujo Thonny** (terminal de firmware directo)

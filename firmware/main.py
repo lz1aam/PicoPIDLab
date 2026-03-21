@@ -18,7 +18,7 @@ from hardware import NTCLG100E2103JB, Heater, StatusRGB, yield_cpu, advance_dead
 import config as P
 from cli import wait_for_run_command, poll_command_nonblocking
 
-_FIRMWARE_VERSION = "1.2.10"
+_FIRMWARE_VERSION = "1.2.11"
 
 def _isfinite(x) -> bool:
     try:

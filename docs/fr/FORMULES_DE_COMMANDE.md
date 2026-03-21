@@ -72,6 +72,23 @@ Code:
 - `firmware/control.py::GainScheduledPIDPercent._interp_gains`
 - `firmware/control.py::GainScheduledPIDPercent.update`
 
+## Analyse de Bode dans `tune`
+
+- `L(jw) = C(e^{jwTs}) * G(jw)`
+- Boucle parallele / ideal effectif :
+  - `C(e^{jwTs}) = Kp + Ki*Ts/(1 - z^{-1}) + Kd*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1})`
+- Boucle SERIES :
+  - `C(e^{jwTs}) = Kc*(1 + Ts/(Ti*(1 - z^{-1})))*(1 + Td*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1}))`
+- `z = e^{jwTs}`
+- Notes :
+  - Le procede reste le modele FOPDT continu identifie `G(jw)`.
+  - La partie regulateur utilise la meme structure discrete de filtre derive que le firmware.
+
+Code:
+- `runner/lab.py::_parallel_pid_freq_response`
+- `runner/lab.py::_series_pid_freq_response`
+- `runner/lab.py::_pid_loop_freq_response`
+
 ## Relay tuning
 
 - `A = y_pp/2`

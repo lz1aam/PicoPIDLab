@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [1.2.11] - 2026-03-21
+
+### Added
+- Runtime assignment now supports structured `GS_TABLE` and `FUZZY_RULE_TABLE` values through the normal firmware CLI and runner recipe path.
+
+### Changed
+- Tune-side Bode analysis now follows the actual active firmware controller more closely, including the discrete derivative filter and SERIES controller form.
+- Runner plot lifecycle now separates saved artifacts from real interactive windows:
+  - experiment and live metrics windows stay interactive
+  - saved artifacts no longer open extra windows
+  - tune-side Bode stays open only as a real interactive plot
+- Strengthened `GS_TABLE` validation and corrected `FUZZY_RULE_TABLE` integer validation.
+- Updated control-formula docs and localized formula references for the current tune-side Bode math and proper scholarly name lettering.
+- Refreshed example/runtime defaults in `firmware/config.py` and experiment recipes in `runner/lab.yaml`.
+- Bumped firmware version to `1.2.11`.
+
 ## [1.2.10] - 2026-03-16
 
 ### Added

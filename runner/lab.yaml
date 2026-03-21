@@ -168,7 +168,7 @@ experiments:
         - duration_s
     params:
       TELEMETRY_MODE: NORMAL
-      EXPERIMENT_RUN_S: 120
+      EXPERIMENT_RUN_S: 30
 
   # [1] ONOFF_STEP_TRACKING
   ONOFF_STEP_TRACKING:
@@ -200,7 +200,7 @@ experiments:
     params:
       CONTROL_MODE: PID
       TELEMETRY_MODE: NORMAL
-      EXPERIMENT_RUN_S: 300
+      EXPERIMENT_RUN_S: 220
       STEADY_WINDOW_S: 15.0
       STEADY_BAND_C: 0.3
       FOPDT_U1_PERCENT: 100
@@ -218,11 +218,11 @@ experiments:
       TELEMETRY_MODE: NORMAL
       PID_VARIANT: PID
       PID_AW_TYPE: CLAMP
-      TUNING_METHOD: CC_PID
+      TUNING_METHOD: ZN2_PID
       TUNING_TARGET_C: 50.0
       TUNING_BAND_C: 1.0
       TUNING_CYCLES: 5
-      EXPERIMENT_RUN_S: 180
+      EXPERIMENT_RUN_S: 120
 
   # [4] P_STEP_TRACKING
   P_STEP_TRACKING:
@@ -235,7 +235,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 45.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: false
+      DIST_ENABLE: true
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -260,7 +260,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 45.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: false
+      DIST_ENABLE: true
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -285,7 +285,7 @@ experiments:
       SETPOINT_TYPE: STEP
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
-      DIST_ENABLE: false
+      DIST_ENABLE: true 
       DIST_MODE: STEP
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
@@ -299,15 +299,16 @@ experiments:
       # KI: 7.57141
       # KD: 50.769
 
-  # [7] PID_IDEAL_STEP_TRACKING
-  PID_IDEAL_STEP_TRACKING:
-    description: "PID ideal step tracking"
-    shortname: pid_ideal_step
+  # [7] PID_IDEAL_RAMP_TRACKING
+  PID_IDEAL_RAMP_TRACKING:
+    description: "PID ideal ramp tracking"
+    shortname: pid_ideal_ramp
     kind: standard
     params:
       CONTROL_MODE: PID
       TELEMETRY_MODE: NORMAL
-      SETPOINT_TYPE: STEP
+      SETPOINT_TYPE: RAMP
+      SETPOINT_RAMP_RATE: 0.5
       SETPOINT_C: 50.0
       EXPERIMENT_RUN_S: 120
       DIST_ENABLE: false
@@ -383,7 +384,7 @@ experiments:
       DIST_MAG_PCT: -20.0
       DIST_START_S: 60.0
       DIST_DURATION_S: 20.0
-      MPC_HORIZON_STEPS: 24
+      MPC_HORIZON_STEPS: 27
       MPC_GRID_STEP_PCT: 5.0
       MPC_MAX_CANDIDATES: 11
       MPC_DU_MAX_PCT: 15.0
@@ -482,4 +483,4 @@ experiments:
       GS_VARIABLE: PV
       # GS table intentionally not set here to preserve tuned RAM values.
       # Example forced schedule override (disabled):
-      # GS_TABLE: [[25.0, 6.0, 0.40, 0.05], [50.0, 5.0, 0.50, 0.10], [75.0, 4.0, 0.60, 0.15]]
+      # GS_TABLE: [[25.0, 40.9, 4.5, 93.6], [50.0, 35.5, 3.9, 81.4], [75.0, 30.2, 3.3, 69.2]]

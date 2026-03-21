@@ -1,6 +1,6 @@
 # Schnellstart
 
-Zielversion: **v1.2.10**
+Zielversion: **v1.2.11**
 
 Dieses Dokument deckt beide unterstützten Workflows ab:
 - **Thonny-Workflow** (direktes Firmware-Terminal)

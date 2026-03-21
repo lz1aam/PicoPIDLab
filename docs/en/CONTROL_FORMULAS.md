@@ -56,7 +56,7 @@ For each formula: equation, symbols/units, source, and code location.
   - Negative `PM` or `GM_dB` indicates the loop has crossed the classical stability boundary.
   - The runner computes these margins from the continuous-time FOPDT loop used for the tune-side analysis plot.
 - Source:
-  - K. J. Astrom, R. M. Murray, *Feedback Systems: An Introduction for Scientists and Engineers*, Princeton University Press, 2008. Frequency-domain stability margin definitions.
+  - K. J. Åström, R. M. Murray, *Feedback Systems: An Introduction for Scientists and Engineers*, Princeton University Press, 2008. Frequency-domain stability margin definitions.
   - MathWorks Control System Toolbox documentation:
     - `margin`: https://www.mathworks.com/help/control/ref/dynamicsystem.margin.html
     - `allmargin`: https://www.mathworks.com/help/control/ref/dynamicsystem.allmargin.html
@@ -72,11 +72,13 @@ For each formula: equation, symbols/units, source, and code location.
   - `u = clamp(P + I + D)`
   - `P = Kp*e`
   - `I[k] = I[k-1] + Ki*e*dt` (with AW policy)
-  - `D = LPF(-Kd*dy/dt)`
+  - `D_raw[k] = -Kd*(y[k] - y[k-1])/Ts`
+  - `D[k] = D[k-1] + alpha*(D_raw[k] - D[k-1])`
 - Source:
-  - K. J. Astrom, T. Hagglund, *PID Controllers: Theory, Design, and Tuning*, 2nd ed.
+  - K. J. Åström, T. Hägglund, *PID Controllers: Theory, Design, and Tuning*, 2nd ed.
 - Code:
   - `firmware/control.py::PIDParallelPercent.update`
+  - `runner/lab.py::_parallel_pid_freq_response`
 
 ### Series/Ideal conversion
 - Equation:
@@ -88,7 +90,7 @@ For each formula: equation, symbols/units, source, and code location.
   - `Td = Ti_eff - Ti`
   - `Kc = Kc_eff*(Ti/Ti_eff)`
 - Source:
-  - K. J. Astrom, T. Hagglund, *PID Controllers*
+  - K. J. Åström, T. Hägglund, *PID Controllers*
 - Code:
   - `firmware/control.py::_series_to_ideal_equivalent`
   - `firmware/control.py::series_configured_from_ideal`
@@ -97,9 +99,11 @@ For each formula: equation, symbols/units, source, and code location.
 - Equation:
   - `e_p = beta*r - y`
   - `e_i = r - y`
-  - `P = Kp*e_p`, `I += Ki*e_i*dt`, `D = -Kd*dy/dt`
+  - `P = Kp*e_p`, `I += Ki*e_i*dt`
+  - `D_raw[k] = -Kd*(y[k] - y[k-1])/Ts`
+  - `D[k] = D[k-1] + alpha*(D_raw[k] - D[k-1])`
 - Source:
-  - K. J. Astrom, T. Hagglund, *Advanced PID Control*
+  - K. J. Åström, T. Hägglund, *Advanced PID Control*
 - Code:
   - `firmware/control.py::PID2DOFPercent.update`
 
@@ -110,7 +114,8 @@ For each formula: equation, symbols/units, source, and code location.
     - `e = r - y`
     - `P = Kp*e`
     - `I[k] = I[k-1] + Ki*e*dt` (conditional integration against total saturation)
-    - `D = LPF(-Kd*dy/dt)`
+    - `D_raw[k] = -Kd*(y[k] - y[k-1])/Ts`
+    - `D[k] = D[k-1] + alpha*(D_raw[k] - D[k-1])`
     - `u_fb = P + I + D`
   - Feedforward path, manual mode:
     - `u_ff = FF_BIAS_PCT + FF_GAIN_PCT_PER_C*(r - ambient)`
@@ -118,10 +123,26 @@ For each formula: equation, symbols/units, source, and code location.
     - `u_ff = u0 + (r - ambient)/K`
 - Source:
   - D. E. Seborg, T. F. Edgar, D. A. Mellichamp, F. J. Doyle III, *Process Dynamics and Control*, 3rd ed. (feedforward compensation structure).
-  - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID feedback path conventions).
+  - K. J. Åström, T. Hägglund, *Advanced PID Control* (PID feedback path conventions).
 - Code:
   - `firmware/control.py::PIDFeedForwardPercent._feedforward`
   - `firmware/control.py::PIDFeedForwardPercent.update`
+
+### Tune-side Bode analysis
+- Equation:
+  - `L(jw) = C(e^{jwTs}) * G(jw)`
+  - Parallel / effective-ideal feedback controller:
+    - `C(e^{jwTs}) = Kp + Ki*Ts/(1 - z^{-1}) + Kd*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1})`
+  - SERIES feedback controller:
+    - `C(e^{jwTs}) = Kc*(1 + Ts/(Ti*(1 - z^{-1})))*(1 + Td*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1}))`
+  - `z = e^{jwTs}`
+- Notes:
+  - The plant side remains the identified continuous FOPDT model `G(jw)`.
+  - The controller side uses the same discrete derivative filter structure as the firmware.
+- Code:
+  - `runner/lab.py::_parallel_pid_freq_response`
+  - `runner/lab.py::_series_pid_freq_response`
+  - `runner/lab.py::_pid_loop_freq_response`
 
 ### Gain-scheduled PID (`GAIN_SCHED`)
 - Equation:
@@ -140,7 +161,7 @@ For each formula: equation, symbols/units, source, and code location.
     - `u = clamp(Kp*e + I + LPF(-Kd*dy/dt))`
 - Source:
   - J. S. Shamma, M. Athans, "Gain Scheduling: Potential Hazards and Possible Remedies," *IEEE Control Systems Magazine*, 1992.
-  - K. J. Astrom, T. Hagglund, *Advanced PID Control* (PID base law).
+  - K. J. Åström, T. Hägglund, *Advanced PID Control* (PID base law).
 - Code:
   - `firmware/control.py::GainScheduledPIDPercent._interp_gains`
   - `firmware/control.py::GainScheduledPIDPercent.update`
@@ -155,7 +176,7 @@ For each formula: equation, symbols/units, source, and code location.
   - `Ku = 4*d_eff/(pi*A)`
   - `Pu = mean(oscillation period)`
 - Source:
-  - Astrom, Hagglund (1984), DOI: `10.1016/0005-1098(84)90014-1`
+  - Åström, Hägglund (1984), DOI: `10.1016/0005-1098(84)90014-1`
 - Code:
   - `firmware/identify.py::run_relay_tuning`
 

@@ -1589,7 +1589,6 @@ def save_plot(
     telemetry: np.ndarray,
     title: str,
     plot_cfg: Optional[Dict[str, object]] = None,
-    keep_open: bool = False,
 ):
     cfg = plot_cfg or {}
     figsize = cfg.get("figsize", [11, 7])
@@ -1630,10 +1629,15 @@ def save_plot(
         ax2.legend(loc=legend_loc)
     fig.suptitle(title)
     fig.tight_layout()
-    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title=title)
+    _save_artifact_figure(fig, path, dpi)
 
 
-def _finalize_saved_figure(fig, path: Path, dpi: int, keep_open: bool = False, window_title: Optional[str] = None):
+def _save_artifact_figure(fig, path: Path, dpi: int):
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+
+
+def _finalize_interactive_figure(fig, path: Path, dpi: int, keep_open: bool = False, window_title: Optional[str] = None):
     fig.savefig(path, dpi=dpi)
     if keep_open:
         try:
@@ -1758,6 +1762,10 @@ def _save_frequency_bode_plot(
     mag_db = 20.0 * np.log10(np.maximum(np.abs(H), 1e-12))
     phase_deg = np.unwrap(np.angle(H)) * 180.0 / np.pi
 
+    if keep_open:
+        LivePlotter._enable_interactive_backend()
+        plt.ion()
+
     fig, (ax_mag, ax_phase) = plt.subplots(
         2,
         1,
@@ -1822,7 +1830,7 @@ def _save_frequency_bode_plot(
             )
     fig.suptitle(title)
     fig.tight_layout()
-    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title=title)
+    _finalize_interactive_figure(fig, path, dpi, keep_open=keep_open, window_title=title)
 
 
 def _interpolate_crossing(x1: float, y1: float, x2: float, y2: float, target: float = 0.0) -> Optional[float]:
@@ -1871,10 +1879,6 @@ def _estimate_margin_info(w: np.ndarray, H: np.ndarray) -> Dict[str, object]:
                 "w_gc": float(10.0 ** x),
                 "phase_gc_deg": float(phase_gc),
                 "pm_deg": float(pm_deg),
-                "point_gc": complex(
-                    _interpolate_series(log_w, np.real(H), x),
-                    _interpolate_series(log_w, np.imag(H), x),
-                ),
             }
         )
     if pm_candidates:
@@ -1894,10 +1898,6 @@ def _estimate_margin_info(w: np.ndarray, H: np.ndarray) -> Dict[str, object]:
                     "w_pc": float(10.0 ** x),
                     "mag_pc_db": float(mag_pc_db),
                     "gm_db": float(-mag_pc_db),
-                    "point_pc": complex(
-                        _interpolate_series(log_w, np.real(H), x),
-                        _interpolate_series(log_w, np.imag(H), x),
-                    ),
                 }
             )
     if gm_candidates:
@@ -1905,7 +1905,7 @@ def _estimate_margin_info(w: np.ndarray, H: np.ndarray) -> Dict[str, object]:
     return out
 
 
-def _parallel_pid_from_runtime_params(params: Dict[str, object]) -> Optional[Dict[str, float]]:
+def _pid_loop_config_from_runtime_params(params: Dict[str, object]) -> Optional[Dict[str, float]]:
     control_mode = str(params.get("CONTROL_MODE", "")).upper()
     if control_mode != "PID":
         return None
@@ -1913,55 +1913,104 @@ def _parallel_pid_from_runtime_params(params: Dict[str, object]) -> Optional[Dic
     if variant not in ("PID", "2DOF", "FF_PID"):
         return None
     algorithm = str(params.get("PID_ALGORITHM", "")).upper()
-    if algorithm == "PARALLEL":
+    ts_s = _safe_float(params.get("TS_S"), None)
+    alpha = _safe_float(params.get("DERIVATIVE_FILTER_ALPHA"), None)
+    if (ts_s is None) or (not np.isfinite(ts_s)) or (ts_s <= 0.0):
+        return None
+    if (alpha is None) or (not np.isfinite(alpha)):
+        return None
+    alpha = max(0.0, min(1.0, float(alpha)))
+
+    out: Dict[str, float] = {
+        "algorithm": algorithm,
+        "variant": variant,
+        "ts_s": float(ts_s),
+        "d_filter_alpha": float(alpha),
+    }
+
+    if algorithm in ("PARALLEL", "IDEAL"):
         kp = _safe_float(params.get("KP"), None)
         ki = _safe_float(params.get("KI"), None)
         kd = _safe_float(params.get("KD"), None)
-    elif algorithm == "IDEAL":
+        if kp is None or ki is None or kd is None:
+            return None
+        out.update({
+            "kp": float(kp),
+            "ki": float(ki),
+            "kd": float(kd),
+        })
+        return out
+
+    if algorithm == "SERIES":
         kc = _safe_float(params.get("KC"), None)
         ti_s = _safe_float(params.get("TI_S"), None)
         td_s = _safe_float(params.get("TD_S"), None)
         if kc is None:
             return None
-        kp = float(kc)
-        ki = 0.0 if (ti_s is None or ti_s <= 0.0) else float(kc) / float(ti_s)
-        kd = 0.0 if (td_s is None or td_s <= 0.0) else float(kc) * float(td_s)
-    elif algorithm == "SERIES":
-        kc = _safe_float(params.get("KC"), None)
-        ti_s = _safe_float(params.get("TI_S"), None)
-        td_s = _safe_float(params.get("TD_S"), None)
-        if kc is None:
-            return None
-        ti_eff = 0.0 if ti_s is None else float(ti_s)
-        td_eff = 0.0 if td_s is None else float(td_s)
-        kp = float(kc) * (1.0 + (td_eff / ti_eff if ti_eff > 0.0 else 0.0))
-        ki = 0.0 if ti_eff <= 0.0 else float(kc) / ti_eff
-        kd = float(kc) * td_eff
-    else:
-        return None
-    if kp is None or ki is None or kd is None:
-        return None
-    return {
-        "kp": float(kp),
-        "ki": float(ki),
-        "kd": float(kd),
-        "algorithm": algorithm,
-        "variant": variant,
-    }
+        out.update({
+            "kc": float(kc),
+            "ti_s": 0.0 if ti_s is None else float(ti_s),
+            "td_s": 0.0 if td_s is None else float(td_s),
+        })
+        return out
+
+    return None
+
+
+def _discrete_derivative_filter_response(w: np.ndarray, ts_s: float, alpha: float) -> np.ndarray:
+    z_inv = np.exp(-1j * w * float(ts_s))
+    return float(alpha) / (1.0 - ((1.0 - float(alpha)) * z_inv))
+
+
+def _parallel_pid_freq_response(pid_cfg: Dict[str, float], w: np.ndarray) -> np.ndarray:
+    ts_s = float(pid_cfg["ts_s"])
+    alpha = float(pid_cfg["d_filter_alpha"])
+    z_inv = np.exp(-1j * w * ts_s)
+    kp = float(pid_cfg["kp"])
+    ki = float(pid_cfg["ki"])
+    kd = float(pid_cfg["kd"])
+    integ = 0.0 if ki == 0.0 else (ki * ts_s) / (1.0 - z_inv)
+    deriv = 0.0
+    if kd != 0.0:
+        deriv = kd * ((1.0 - z_inv) / ts_s) * _discrete_derivative_filter_response(w, ts_s, alpha)
+    return kp + integ + deriv
+
+
+def _series_pid_freq_response(pid_cfg: Dict[str, float], w: np.ndarray) -> np.ndarray:
+    ts_s = float(pid_cfg["ts_s"])
+    alpha = float(pid_cfg["d_filter_alpha"])
+    z_inv = np.exp(-1j * w * ts_s)
+    kc = float(pid_cfg["kc"])
+    ti_s = float(pid_cfg["ti_s"])
+    td_s = float(pid_cfg["td_s"])
+    pi_factor = 1.0
+    if ti_s > 0.0:
+        pi_factor = 1.0 + (ts_s / ti_s) / (1.0 - z_inv)
+    d_factor = 1.0
+    if td_s > 0.0:
+        d_factor = 1.0 + (td_s * ((1.0 - z_inv) / ts_s) * _discrete_derivative_filter_response(w, ts_s, alpha))
+    return kc * pi_factor * d_factor
+
+
+def _pid_controller_freq_response(pid_cfg: Dict[str, float], w: np.ndarray) -> Optional[np.ndarray]:
+    algorithm = str(pid_cfg.get("algorithm", "")).upper()
+    if algorithm in ("PARALLEL", "IDEAL"):
+        return _parallel_pid_freq_response(pid_cfg, w)
+    if algorithm == "SERIES":
+        return _series_pid_freq_response(pid_cfg, w)
+    return None
 
 
 def _pid_loop_freq_response(pid_cfg: Dict[str, float], model: Dict[str, float]) -> Tuple[np.ndarray, np.ndarray]:
     K = float(model["K"])
     tau_s = float(model["tau_s"])
     theta_s = float(model["theta_s"])
-    kp = float(pid_cfg["kp"])
-    ki = float(pid_cfg["ki"])
-    kd = float(pid_cfg["kd"])
     w = _fopdt_frequency_grid(tau_s, theta_s)
     for _ in range(6):
         G = _fopdt_freq_response(K, tau_s, theta_s, w)
-        jw = 1j * w
-        C = kp + (ki / jw) + (kd * jw)
+        C = _pid_controller_freq_response(pid_cfg, w)
+        if C is None:
+            raise ValueError("unsupported PID algorithm for loop analysis")
         L = C * G
         mag_db = 20.0 * np.log10(np.maximum(np.abs(L), 1e-12))
         phase_deg = np.unwrap(np.angle(L)) * 180.0 / np.pi
@@ -1981,7 +2030,7 @@ def _save_tuned_loop_frequency_artifacts(
     plot_cfg: Optional[Dict[str, object]] = None,
     keep_open: bool = False,
 ):
-    pid_cfg = _parallel_pid_from_runtime_params(runtime_params)
+    pid_cfg = _pid_loop_config_from_runtime_params(runtime_params)
     if not pid_cfg:
         _emit_lab("skipped frequency margins (active controller is not a supported fixed PID form)")
         return
@@ -2287,7 +2336,6 @@ def save_metrics_summary_plot(
     path: Path,
     metrics: Dict[str, object],
     metrics_cfg: Optional[Dict[str, object]] = None,
-    keep_open: bool = False,
 ):
     if isinstance(metrics_cfg, dict) and (not bool(metrics_cfg.get("save_plot", True))):
         return
@@ -2311,7 +2359,7 @@ def save_metrics_summary_plot(
     )
     fig.tight_layout()
     dpi = int((metrics_cfg or {}).get("dpi", 140)) if isinstance(metrics_cfg, dict) else 140
-    _finalize_saved_figure(fig, path, dpi, keep_open=keep_open, window_title="Run Metrics")
+    _save_artifact_figure(fig, path, dpi)
 
 
 def run_single_experiment(
@@ -2480,7 +2528,7 @@ def run_single_experiment(
     (run_dir / "plot_settings.json").write_text(
         json.dumps(effective_plot_cfg, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    keep_artifacts_open = bool(hold_live_at_end and run_ok)
+    keep_interactive_bode_open = bool(hold_live_at_end and run_ok)
     if exp.kind == "fopdt":
         write_fopdt_model_artifacts(raw_lines, run_dir)
     if exp.kind == "tuning":
@@ -2492,7 +2540,7 @@ def run_single_experiment(
                 model,
                 runtime_params,
                 effective_plot_cfg,
-                keep_open=keep_artifacts_open,
+                keep_open=keep_interactive_bode_open,
             )
         else:
             _emit_lab("warning: tune Bode plot skipped (no valid FOPDT model in runtime state)")
@@ -2501,13 +2549,11 @@ def run_single_experiment(
         telemetry,
         f"{exp.exp_id} ({exp.shortname})",
         effective_plot_cfg,
-        keep_open=keep_artifacts_open,
     )
     save_metrics_summary_plot(
         run_dir / "metrics_summary.png",
         metrics_full,
         cfg.metrics_cfg,
-        keep_open=keep_artifacts_open,
     )
     return RunResult(
         telemetry=telemetry,

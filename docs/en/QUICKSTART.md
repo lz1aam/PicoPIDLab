@@ -1,6 +1,6 @@
 # Quick Start
 
-Version target: **v1.2.10** (2026-03-16)
+Version target: **v1.2.11** (2026-03-21)
 
 This guide covers both supported workflows:
 - **Thonny workflow** (direct firmware terminal)
@@ -154,7 +154,7 @@ Completion token used by host synchronization:
 ## 6. Recommended Student Flow
 
 1. `model` to identify/update FOPDT model (`MODEL_*` in RAM)
-2. `tune` with selected `TUNING_METHOD` (model-based or relay-based)
+2. `tune` with selected `TUNING_METHOD` (model-based or ultimate-cycle after relay feedback)
 3. `control` with updated gains
 4. Compare PV/SP/OP trends and saved metrics
 

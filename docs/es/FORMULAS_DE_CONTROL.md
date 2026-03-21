@@ -76,6 +76,23 @@ Código:
 - `firmware/control.py::GainScheduledPIDPercent._interp_gains`
 - `firmware/control.py::GainScheduledPIDPercent.update`
 
+## Analisis de Bode en `tune`
+
+- `L(jw) = C(e^{jwTs}) * G(jw)`
+- Realimentacion paralela / ideal efectiva:
+  - `C(e^{jwTs}) = Kp + Ki*Ts/(1 - z^{-1}) + Kd*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1})`
+- Realimentacion SERIES:
+  - `C(e^{jwTs}) = Kc*(1 + Ts/(Ti*(1 - z^{-1})))*(1 + Td*(1 - z^{-1})/Ts * alpha/(1 - (1 - alpha)z^{-1}))`
+- `z = e^{jwTs}`
+- Notas:
+  - La planta sigue siendo el modelo FOPDT continuo identificado `G(jw)`.
+  - La parte del controlador usa la misma estructura discreta del filtro derivativo que el firmware.
+
+Código:
+- `runner/lab.py::_parallel_pid_freq_response`
+- `runner/lab.py::_series_pid_freq_response`
+- `runner/lab.py::_pid_loop_freq_response`
+
 ## Sintonía relay
 
 ### Ganancia última

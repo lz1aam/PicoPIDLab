@@ -9,9 +9,6 @@ Primary runtime is **MicroPython on RP2040** (RP2040-Zero class boards).
 
 ![PicoPID Lab hardware](hardware/PicoPIDLab-picture.jpg)
 
-Students primarily edit one file:
-- `firmware/config.py`
-
 ## Interfaces
 
 ### Thonny firmware workflow
@@ -162,7 +159,7 @@ Documentation language folders:
 2. Upload files from `firmware/` to board root.
 3. Install host dependencies:
    - `pip install pyserial pyyaml matplotlib numpy`
-4. Edit experiments in `runner/lab.yaml`.
+4. Edit parameters in `firmware/config.py` or experiments in `runner/lab.yaml`.
 5. Start host interface:
    - `python3 runner/lab.py`
 
@@ -211,21 +208,12 @@ For PID family:
 - `PID_ALGORITHM`: `PARALLEL`, `IDEAL`, `SERIES`
 - `TUNING_METHOD`:
   - model-based: `ZN1_P`, `ZN1_PI`, `ZN1_PID`, `CC_P`, `CC_PI`, `CC_PID`
-  - relay-based: `ZN2_P`, `ZN2_PI`, `ZN2_PID`, `TL_P`, `TL_PI`, `TL_PID`
+  - relay-feedback-derived rules: `ZN2_P`, `ZN2_PI`, `ZN2_PID`, `TL_P`, `TL_PI`, `TL_PID`
 
 ## Workflows
 
-### A) Thonny-only workflow
-
-- Run `firmware/main.py` from Thonny.
-- Use firmware commands directly in Thonny shell.
-- Best for interactive teaching sessions and quick demonstrations.
-
-### B) Host lab workflow (`runner/lab.py`)
-
-- Experiment-driven runs from `runner/lab.yaml`
-- Automatic run folders with telemetry CSV/log/metrics
-- Best for repeatable, report-grade experiments
+- `Thonny`: direct firmware interaction for classroom demonstrations and manual experiments
+- `runner/lab.py`: recipe-driven host workflow for repeatable runs, plots, metrics, and run folders
 
 Run artifacts:
 - `runner/runs/<timestamp>__<EXPERIMENT>__<shortname>/`

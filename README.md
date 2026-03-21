@@ -65,7 +65,7 @@ Relay feedback around the target temperature follows the Åström-Hägglund appr
 
 ![ZN2 PID Bode plot](docs/examples/pid-relay-zn2-bode.png)
 
-Oscillation-based tuning can push the loop close to the stability boundary. The Bode plot shows that directly through weak or negative classical margins.
+Oscillation-based tuning can drive the loop to instability. The Bode plot shows that directly through negative gain and phase margins.
 
 ### Model-based tuning Bode margins (Cohen-Coon PID)
 
